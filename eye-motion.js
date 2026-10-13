@@ -1,0 +1,142 @@
+import {selectedFrame,sampleAtTime} from './segment-review.js?v=mobile9';
+import {summarize,scoreNIHSS,phaseAt,NIHSS_SOURCE} from './assessment.js';
+import {eyeUsable} from './eye-quality.js';
+
+export const EYE_VIDEO_SIZE=Object.freeze({width:960,height:420});
+
+// Work on copies. Clip-level phase edits never overwrite the recorded exam.
+export function reviewedSamples(clip,report,version='selected'){
+  const reviews=new Map(report.frames.map(f=>[f.sourceIndex,f]));
+  return clip.data.samples.map((s,i)=>{
+    const out=selectedFrame(s,reviews.get(i),version);
+    if(clip.reviewIntervals){
+      const phase=phaseAt(s.rawVideoTimeSeconds,clip.reviewIntervals);
+      out.phase=phase.phase;out.phaseStart=s.t-(s.rawVideoTimeSeconds-phase.phaseStart);
+    }
+    return out;
+  });
+}
+
+export function eyeDiagramState(sample){
+  return Object.fromEntries(['right','left'].map(side=>{
+    const kind=sample?.reviewKinds?.[side]??'original',usable=eyeUsable(sample,side);
+    return [side,{position:usable?sample[side].corrected:null,kind,
+      label:kind==='blink'?'Blink':kind==='unresolved'?'Unresolved':!usable?'No measurement':kind==='estimated'?'Accepted estimate':'Observed'}];
+  }));
+}
+
+function evidenceReasons(evidence){
+  const reasons=[];
+  for(const side of ['left','right'])for(const direction of ['left','right']){
+    const value=evidence.excursions[side]?.[direction];
+    if(Number.isFinite(value))reasons.push(`${side==='left'?'Left':'Right'} eye → subject-${direction}: ${value.toFixed(2)} normalized excursion.`);
+  }
+  for(const flag of evidence.flags){
+    const parts=flag.split(':');
+    if(parts[2]==='reduced-excursion')reasons.push(`Reduced measured movement: ${parts[0]} eye toward subject-${parts[1]}. This alone does not establish palsy.`);
+    else if(parts[1]==='asymmetric-excursion')reasons.push(`The eyes moved by different amounts toward subject-${parts[0]}.`);
+    else if(flag==='possible-resting-deviation')reasons.push('Both eyes have an offset at rest; clinical confirmation of conjugate deviation is needed.');
+  }
+  return reasons;
+}
+
+// Suggestions are unvalidated movement evidence, not a classifier trained on
+// NIHSS labels. Exact rule mapping requires separately entered clinical facts.
+export function clipGazeSuggestion(clip,report){
+  const checked=new Set(report.frames.map(f=>f.sourceIndex));
+  // Archive gaps are not implicitly approved measurements for a new score.
+  const assess=rows=>summarize(rows.map((s,i)=>checked.has(i)?s:{...s,left:null,right:null,valid:false}),clip.data.config);
+  const samples=reviewedSamples(clip,report),evidence=assess(samples),original=assess(reviewedSamples(clip,report,'original'));
+  const pending=report.segments.filter(s=>s.decision==='unreviewed').length;
+  const estimated=samples.reduce((n,s)=>n+['left','right'].filter(side=>s.reviewKinds[side]==='estimated').length,0);
+  const result={score:null,candidates:[],title:'Review required',reasons:[],evidence,originalEvidence:original,
+    pending,estimated,source:NIHSS_SOURCE,mode:'experimental-movement-suggestion',
+    limitation:'Normalized iris positions are not clinical gaze angles. Research thresholds are not NIHSS cutoffs.'};
+  if(pending){result.reasons.push(`Choose a result for ${pending} remaining segment${pending===1?'':'s'} first.`);return result;}
+  const clinical=clip.clinicalObservation;
+  if(clinical?.finding&&clinical.finding!=='unknown'){
+    // This maps the examiner's independent examination, not an inference that
+    // a missing/short video contains a complete examination or reflex test.
+    const mapped=scoreNIHSS({...clinical,useVideoEvidence:false},evidence);
+    result.clinical=mapped;result.mode='clinician-observation-rule-mapping';
+    result.score=mapped.score;result.candidates=mapped.score===null?[]:[mapped.score];
+    result.title=mapped.score===null?'Clinical details incomplete':`NIHSS Best Gaze: ${mapped.score} · examiner-based`;
+    result.reasons=[...mapped.basis,...mapped.missing];
+    if(!evidence.adequate)result.reasons.push('The video cannot independently support this score; it maps the entered examination findings.');
+    if(clinical.finding==='normal'&&evidence.flags.length)result.reasons.push('Video movement flags conflict with the normal finding. Recheck the clip and examination.');
+    return result;
+  }
+  if(!evidence.adequate){
+    result.title='No video score yet';
+    result.reasons.push('Label and capture adequate center, subject-left and subject-right phases. Missing data is not a score of 0.');
+    for(const [name,p]of Object.entries(evidence.phases))if(!p.adequate)
+      result.reasons.push(`${name}: ${p.validSeconds.toFixed(1)} valid seconds, ${Math.round(p.coverage*100)}% usable coverage.`);
+    return result;
+  }
+  result.reasons=evidenceReasons(evidence);
+  if(!evidence.flags.length){
+    result.candidates=[0];result.title='Possible 0 · confirm normal gaze';
+    result.reasons.unshift('Both eyes show horizontal movement in both labelled directions, without a research-threshold flag. Subtle palsy is not excluded.');
+  }else{
+    result.candidates=[1,2];result.title='Abnormal pattern · assess 1 vs 2';
+    result.reasons.unshift('The clip flags a movement limitation or deviation. Poor task performance or tracking error can also cause this pattern.');
+    result.reasons.push('1 requires clinically abnormal gaze without forced deviation / total paresis, or deviation overcome by voluntary or reflex movement. 2 requires forced deviation / total paresis not overcome by the oculocephalic reflex.');
+  }
+  if(estimated){
+    result.reasons.push(`${estimated} accepted eye-position estimates contribute to this summary.`);
+    const changed=original.adequate!==evidence.adequate||JSON.stringify(original.flags)!==JSON.stringify(evidence.flags);
+    if(changed)result.reasons.push('Accepting replacements changed the movement evidence. Compare the original video before confirming.');
+  }
+  if(checked.size<samples.length)result.reasons.push(`${samples.length-checked.size} unchecked samples were excluded from scoring evidence.`);
+  return result;
+}
+
+export function drawEyeMotion(ctx,sample,time){
+  const {width:w,height:h}=ctx.canvas,k=w/960;
+  ctx.save();ctx.scale(k,h/420);ctx.fillStyle='#0b1520';ctx.fillRect(0,0,960,420);
+  ctx.fillStyle='#e1eef4';ctx.font='32px system-ui';ctx.fillText('HORIZONTAL EYE MOTION',28,42);
+  ctx.fillStyle='#97b2c4';ctx.font='28px system-ui';ctx.fillText(`${time.toFixed(2)} s · ${sample?.phase??'No sample'}`,28,85);
+  const state=eyeDiagramState(sample);
+  for(const [i,side]of ['right','left'].entries()){
+    const x=48+i*480,y=204,width=384,e=state[side],color=side==='right'?'#80baff':'#61dcc3';
+    ctx.fillStyle=color;ctx.font='32px system-ui';ctx.fillText(`Subject ${side} eye`,x,145);
+    ctx.strokeStyle='#7592a6';ctx.lineWidth=4;ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+width,y);ctx.stroke();
+    for(const p of [x,x+width]){ctx.beginPath();ctx.moveTo(p,y-12);ctx.lineTo(p,y+12);ctx.stroke();}
+    ctx.strokeStyle='#496071';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x+width/2,y-7);ctx.lineTo(x+width/2,y+7);ctx.stroke();
+    if(e.position!==null){
+      const px=x+(1+e.position)*width/2;
+      ctx.strokeStyle=ctx.fillStyle=e.kind==='estimated'?'#e4a0ff':color;
+      ctx.beginPath();ctx.arc(px,y,11,0,Math.PI*2);
+      if(e.kind==='estimated'){ctx.setLineDash([4,3]);ctx.lineWidth=4;ctx.stroke();ctx.setLineDash([]);}else ctx.fill();
+    }
+    ctx.fillStyle=e.kind==='estimated'?'#e4a0ff':'#c4d6e2';ctx.font='30px system-ui';
+    ctx.fillText(e.label+(e.position===null?'':` · ${e.position.toFixed(3)}`),x,262,400);
+  }
+  ctx.fillStyle='#96acbd';ctx.font='28px system-ui';
+  ctx.fillText('← Subject-right                   Subject-left →',28,329);
+  ctx.font='25px system-ui';ctx.fillText('Fixed eye width · Purple = accepted estimate',28,367);
+  ctx.fillText('Normalized, not degrees · Approximate pose correction',28,400);
+  ctx.restore();
+}
+
+export function makeEyeMotionRenderer(clip,report){
+  const samples=reviewedSamples(clip,report); // Freeze choices and phases for export.
+  return (ctx,_video,time)=>{const i=sampleAtTime(samples,time);drawEyeMotion(ctx,i<0?null:samples[i],time);};
+}
+
+const el=(tag,text)=>{const e=document.createElement(tag);if(text)e.textContent=text;return e;};
+export function createEyeMotionPlayer({clip,report}){
+  const root=el('section'),canvas=el('canvas');root.className='eye-motion-player';Object.assign(canvas,EYE_VIDEO_SIZE);
+  canvas.setAttribute('aria-label','Head-relative horizontal eye motion');
+  const row=el('div'),play=el('button','Play eye motion'),timeLabel=el('span');row.className='motion-controls';row.append(play,timeLabel);
+  const seek=el('input');seek.type='range';seek.min=0;seek.max=clip.data.recording.durationSeconds;seek.step=.01;seek.value=0;seek.setAttribute('aria-label','Eye motion time');
+  const note=el('p','Fixed eye-corner length; head-relative horizontal position. Gaps stay empty.');note.className='hint';
+  root.append(canvas,row,seek,note);
+  let time=0,start=0,raf=null,playing=false,render=makeEyeMotionRenderer(clip,report);
+  function draw(){render(canvas.getContext('2d'),null,time);seek.value=time;timeLabel.textContent=`${time.toFixed(1)} / ${Number(seek.max).toFixed(1)} s`;}
+  function pause(){playing=false;cancelAnimationFrame(raf);play.textContent='Play eye motion';}
+  function loop(now){time=Math.min(Number(seek.max),(now-start)/1000);draw();if(time>=Number(seek.max)){pause();return;}raf=requestAnimationFrame(loop);}
+  play.onclick=()=>{if(playing){pause();return;}if(time>=Number(seek.max))time=0;playing=true;start=performance.now()-time*1000;play.textContent='Pause eye motion';raf=requestAnimationFrame(loop);};
+  seek.oninput=()=>{pause();time=Number(seek.value);draw();};draw();
+  return {element:root,pause,refresh(){render=makeEyeMotionRenderer(clip,report);draw();},dispose:pause};
+}

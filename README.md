@@ -10,13 +10,23 @@ On phones, the app opens directly into a single-screen live workspace. Use **Too
 
 Video, independent eye measurements, head pose, phase selection and recording controls remain visible. **Setup** contains camera/import/format options; **Clips** contains replay and downloads; **Review** contains the evidence and examiner form.
 
-## Segment review (segment8)
+## Mobile clip review and eye-only motion (mobile9)
+
+Each clip has visible **Download** and **Delete** actions at the top. Deletion asks for confirmation. Review, Eye motion and Video are separate views. Tap the original or suggested image card to select that track for the current single-eye segment; the selected card is highlighted. Leave unresolved and Undo remain available. The Download sheet contains the exact original video, reviewed video, eye-only video and data, with MP4/WebM options where supported. Original recordings are retained.
+
+Eye motion renders fixed, equally normalized eye-corner lines with independently moving iris dots. It uses the selected head-relative **horizontal** position; no face or head movement is rendered. Both width and screen location are fixed, not measurements of changing anatomical eye length. Missing and blink samples have no dot; accepted estimates are purple. Rendering does not improve the underlying planar pose compensation or make it exact. It is not a calibrated three-dimensional eye rotation or a vertical-gaze test.
+
+After all segment choices, the clip shows an experimental Best Gaze suggestion and reasons using the existing movement thresholds. Adequate labelled center, subject-left and subject-right phases are required for video evidence. A possible 0 is conditional; abnormal movement flags ask the examiner to distinguish 1 from 2 and do not autonomously assign either score. Normal-like movement cannot exclude subtle palsy. The expandable exam context allows actual clip-time phase labels and independent clinician findings. Exact 0/1/2 rule mapping requires an examiner ID and an adequate exam; 2 requires the applicable recorded reflex finding. No reflex or palsy diagnosis is inferred from missing tracking. Clinical scores are explicitly based on the examiner's entries. The original session's assessment is not overwritten.
+
+Eye-only and reviewed exports are enabled after segment review. Choices and phase labels are frozen during encoding; changing them invalidates a prepared download. Review JSON includes the derived samples, phase overrides, clinician entries, suggestion, original movement summary, and count of accepted estimates. CSV retains the per-eye correction provenance. No LLM is used, and videos stay in the browser.
+
+## Temporal segment analysis
 
 After recording, the app fits image-supported iris candidates over the whole sequence with forward/backward dynamic programming in head-relative coordinates. Only suspicious single-eye segments are shown. A paired animated preview uses the same saved detector input for original and proposed tracks. The examiner makes one reversible decision per segment. Unaffected eyes are not shown in the review cards.
 
 Blinks require a high blink score, a narrow opening, and reopening within 650 ms; narrow extreme gaze or sustained closure alone is retained. Blink samples are excluded from review/estimation. The original recording is preserved. Short stable gaps may be estimated only between observed same-eye anchors (at most 250 ms), with stable neighbours and no phase, head, blink or archive break. Partly hidden iris centres also require current image support and reliable same-eye anchors on both sides, at most 1.6 seconds apart; candidates outside the observed position envelope plus a small experimental margin are rejected. No normal excursion or bilateral symmetry is assumed. Long or ambiguous invisible motion remains unresolved. These are experimental thresholds, not validated clinical accuracy.
 
-Full video comparison redraws original or examiner-selected tracks over the complete raw clip, at the same timeline. Accepted estimates are purple; unresolved samples are unmeasured. MP4/WebM exports snapshot the choices and render locally. The exact original analysis/raw files remain downloadable. Full-video alignment uses approximate raw timestamps; segment crops use exact archived images. NIHSS scores and original data are unchanged.
+The Video view redraws original or examiner-selected tracks over the complete raw clip, at the same timeline. Accepted estimates are purple; unresolved samples are unmeasured. MP4/WebM exports snapshot the choices and render locally. The exact original analysis/raw files remain downloadable. Full-video alignment uses approximate raw timestamps; segment crops use exact archived images. The original session's NIHSS entry and original data are unchanged.
 
 Review JSON preserves originals and per-segment/per-eye provenance; CSV includes original, proposed and selected values. Only saved analysis frames are checked (48 MiB archive per clip). Standalone older videos cannot use this workflow. This replaces the previous frame-by-frame self-check and manual short-gap UI. No LLM or image upload is used.
 

@@ -1,12 +1,12 @@
 import {cameraOrientation} from './camera-orientation.js';
-import {runSelfCheck} from './self-check.js?v=segment8';
-import {createSelfCheckUI} from './self-check-ui.js?v=segment8';
+import {runSelfCheck} from './self-check.js?v=mobile9';
+import {createSelfCheckUI} from './self-check-ui.js?v=mobile9';
 import {simplifyUI} from './simplify-ui.js';
 import {eyeUsable,eyeQualityLabel} from './eye-quality.js';
 import {DEFAULTS,VERSION,measureFrame,DisplayFilter} from './geometry.js?v=quality5';
 import {parseIntervals,phaseAt,summarize,scoreNIHSS} from './assessment.js';
 import {demoInput} from './fixtures.js';
-import {GazeRecorder,drawEyeMarkers,extensionFor,recordingCsv,recordingMime} from './recording.js?v=segment8';
+import {GazeRecorder,drawEyeMarkers,extensionFor,recordingCsv,recordingMime} from './recording.js?v=mobile9';
 import {convertVideo} from './video-export.js?v=repair6';
 import {startLiveLoop} from './live-loop.js?v=live3';
 import {captureVideoFrame,bitmapWithDeadline} from './frame-capture.js?v=live3';
@@ -400,10 +400,27 @@ function renderRecordings(){
     addButton('Eye data CSV',()=>saveBlob(new Blob([recordingCsv(clip.data)],{type:'text/csv;charset=utf-8'}),`${base}_eyes.csv`));
     const hint=document.createElement('p');hint.className='hint';hint.textContent=`${new Date(r.startedAt).toLocaleString('en-US')} · No audio · Eye positions are normalized. Analysis updates at detection speed; raw video preserves continuous motion.`;
     if(clip.data.errors.length){const error=document.createElement('p');error.className='warning';error.textContent='Recording encountered errors: '+clip.data.errors.join('；');details.append(error);}
-    const remove=document.createElement('button');remove.textContent='Remove clip';remove.className='remove-recording';remove.onclick=()=>{clip.checkController?.abort();clip.checkUi?.dispose();clip.repairUi?.dispose();player.pause();URL.revokeObjectURL(clip.analysisUrl);URL.revokeObjectURL(clip.rawUrl);recordedClips=recordedClips.filter(c=>c!==clip);renderRecordings();refreshRecordingControls();};
-    const downloads=document.createElement('details'),downloadTitle=document.createElement('summary');downloadTitle.textContent='Downloads';downloads.append(downloadTitle,exportLabel,exportFormat,buttons,exportStatus,cancel,readyDownload,hint,remove);
+    const deleteConfirm=document.createElement('div');deleteConfirm.className='clip-delete-confirm';deleteConfirm.hidden=true;
+    const deleteNote=document.createElement('p');deleteNote.textContent='Delete this clip and its unsaved review?';
+    const deleteYes=document.createElement('button');deleteYes.textContent='Yes, delete clip';deleteYes.className='remove-recording danger';
+    const deleteNo=document.createElement('button');deleteNo.textContent='Keep clip';deleteNo.onclick=()=>{deleteConfirm.hidden=true;remove.focus();};deleteConfirm.append(deleteNote,deleteYes,deleteNo);
+    const remove=document.createElement('button');remove.textContent='Delete';remove.setAttribute('aria-label',`Delete clip ${i+1}`);remove.className='remove-recording danger';remove.onclick=()=>{if(activeConversion)return;deleteConfirm.hidden=!deleteConfirm.hidden;};
+    deleteYes.onclick=()=>{
+      if(activeConversion)return;
+      clip.checkController?.abort();clip.checkUi?.dispose();clip.repairUi?.dispose();player.pause();downloadDialog.remove();URL.revokeObjectURL(clip.analysisUrl);URL.revokeObjectURL(clip.rawUrl);recordedClips=recordedClips.filter(c=>c!==clip);renderRecordings();refreshRecordingControls();};
+    const downloads=document.createElement('details'),downloadTitle=document.createElement('summary');downloadTitle.textContent='Original files & other formats';downloads.append(downloadTitle,exportLabel,exportFormat,buttons,exportStatus,cancel,readyDownload,hint);
+    const downloadDialog=document.createElement('dialog');downloadDialog.className='clip-download-dialog';downloadDialog.setAttribute('aria-label',`Clip ${i+1} downloads`);
+    const downloadHead=document.createElement('div');downloadHead.className='download-heading';
+    const downloadHeading=document.createElement('h3');downloadHeading.textContent=`Clip ${i+1} downloads`;
+    const closeDownload=document.createElement('button');closeDownload.textContent='Close';closeDownload.setAttribute('aria-label','Close downloads');closeDownload.onclick=()=>downloadDialog.close();downloadHead.append(downloadHeading,closeDownload);
+    const quick=document.createElement('button');quick.textContent='↓ Download original video';quick.className='primary';quick.onclick=()=>saveBlob(clip.analysis,`${base}_analysis.${extensionFor(clip.analysis.type)}`);
+    downloadDialog.append(downloadHead,quick,checkUi.downloadElement,downloads);
+    const toolbar=document.createElement('div');toolbar.className='clip-toolbar';
+    const downloadButton=document.createElement('button');downloadButton.textContent='↓ Download';downloadButton.className='primary';downloadButton.setAttribute('aria-label',`Download clip ${i+1}`);
+    downloadButton.onclick=()=>{checkUi.pause();player.pause();downloadDialog.showModal();};toolbar.append(downloadButton,remove);
+    details.addEventListener('toggle',()=>{if(!details.open){checkUi.pause();player.pause();}});
     playbackTitle.textContent='Original recording files';
-    playbackBox.append(label,select,player);details.append(checkUi.element,playbackBox,downloads);list.append(details);
+    playbackBox.append(label,select,player);details.append(toolbar,deleteConfirm,checkUi.element,playbackBox,downloadDialog);list.append(details);
   }
   $('recordingsLimit').hidden=recordedClips.length<3;
   refreshRecordingControls();

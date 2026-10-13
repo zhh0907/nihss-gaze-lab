@@ -1,4 +1,4 @@
-import {selectedFrame,sampleAtTime} from './segment-review.js?v=segment8';
+import {selectedFrame,sampleAtTime} from './segment-review.js?v=mobile9';
 import {drawEyeMarkers} from './recording.js';
 
 const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text)e.textContent=text;if(cls)e.className=cls;return e;};
@@ -22,12 +22,17 @@ export function drawEyeCrop(canvas,image,eye,reference,estimated=false){
 
 // Matched source images, not two independently seeking video elements. This
 // preview shows every archived frame in the segment, with no timestamp drift.
-export function createSegmentPreview({clip,report,segment}){
+export function createSegmentPreview({clip,report,segment,onChoose=()=>{},disabled=false}){
   const root=el('div',null,'segment-preview'),pair=el('div',null,'check-pair');
   const frames=segment.sourceIndices.map(i=>report.frames.find(f=>f.sourceIndex===i));
-  const cards=['Original tracking','Suggested track'].map(label=>{
-    const card=el('div',null,'check-version'),canvas=el('canvas'),caption=el('span');canvas.width=480;canvas.height=260;
-    canvas.setAttribute('aria-label',label+' · '+segment.side+' eye');card.append(el('strong',label),canvas,caption);pair.append(card);return {canvas,caption};
+  const cards=['Original tracking','Suggested track'].map((label,i)=>{
+    const choice=i?'suggestion':'original',card=el('button',null,'check-version track-choice'),canvas=el('canvas'),caption=el('span');canvas.width=480;canvas.height=260;
+    card.type='button';card.disabled=disabled||(i===1&&!segment.proposedCount);
+    card.setAttribute('aria-label',`Choose ${i?'suggested':'original'} track for ${segment.side} eye`);
+    card.setAttribute('aria-pressed',String(segment.decision===choice));card.onclick=()=>onChoose(choice);
+    canvas.setAttribute('aria-label',label+' · '+segment.side+' eye');
+    card.append(el('strong',label),canvas,caption,el('span',segment.decision===choice?'✓ Selected':i===1&&!segment.proposedCount?'No replacement':'Tap to select','choice-label'));
+    pair.append(card);return {canvas,caption};
   });
   const controls=el('div',null,'buttons'),play=el('button','Play segment'),speed=el('select');speed.setAttribute('aria-label','Segment playback speed');
   for(const [v,t]of [['1','1× speed'],['0.5','0.5× speed']])speed.add(new Option(t,v));
@@ -38,7 +43,7 @@ export function createSegmentPreview({clip,report,segment}){
   function pause(){playing=false;clearTimeout(timer);play.textContent='Play segment';}
   async function draw(){
     const t=++token,f=frames[index],entry=clip.reviewFrames.find(e=>e.sourceIndex===f.sourceIndex);
-    let image;
+    let image;if(!entry){status.textContent='Saved frame unavailable.';pause();return;}
     try{image=await createImageBitmap(entry.blob);}catch{status.textContent='Saved frame could not be read.';pause();return;}
     if(disposed||t!==token){image.close();return;}
     const e=f[segment.side],original=selectedFrame(f.sample,f,'original')[segment.side],proposal=selectedFrame(f.sample,f,'proposal')[segment.side];

@@ -39,6 +39,6 @@ export function simplifyUI(){
     $('recordStop').textContent='Finish clip';
     document.querySelector('#recordings > .hint').textContent='Clips stay on this device. Download before closing or refreshing.';
     const exports=document.querySelector('.exports');const sessionFold=fold('Full session data',[exports]);exports.classList.remove('exports');sessionFold.classList.add('exports');
-    document.querySelector('header p').textContent='Record → Image check → Examiner review';
+    document.querySelector('header p').textContent='Record → Review segments → Eye motion';
   }
 }
