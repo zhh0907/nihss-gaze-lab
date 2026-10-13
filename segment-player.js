@@ -1,4 +1,4 @@
-import {selectedFrame,sampleAtTime} from './segment-review.js?v=mobile9';
+import {selectedFrame,sampleAtTime} from './segment-review.js?v=clean10';
 import {drawEyeMarkers} from './recording.js';
 
 const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text)e.textContent=text;if(cls)e.className=cls;return e;};
@@ -25,22 +25,22 @@ export function drawEyeCrop(canvas,image,eye,reference,estimated=false){
 export function createSegmentPreview({clip,report,segment,onChoose=()=>{},disabled=false}){
   const root=el('div',null,'segment-preview'),pair=el('div',null,'check-pair');
   const frames=segment.sourceIndices.map(i=>report.frames.find(f=>f.sourceIndex===i));
-  const cards=['Original tracking','Suggested track'].map((label,i)=>{
+  const cards=['Original','Suggested'].map((label,i)=>{
     const choice=i?'suggestion':'original',card=el('button',null,'check-version track-choice'),canvas=el('canvas'),caption=el('span');canvas.width=480;canvas.height=260;
     card.type='button';card.disabled=disabled||(i===1&&!segment.proposedCount);
     card.setAttribute('aria-label',`Choose ${i?'suggested':'original'} track for ${segment.side} eye`);
     card.setAttribute('aria-pressed',String(segment.decision===choice));card.onclick=()=>onChoose(choice);
     canvas.setAttribute('aria-label',label+' · '+segment.side+' eye');
-    card.append(el('strong',label),canvas,caption,el('span',segment.decision===choice?'✓ Selected':i===1&&!segment.proposedCount?'No replacement':'Tap to select','choice-label'));
+    card.append(el('strong',label+(segment.decision===choice?' ✓':'')),canvas,caption);
     pair.append(card);return {canvas,caption};
   });
-  const controls=el('div',null,'buttons'),play=el('button','Play segment'),speed=el('select');speed.setAttribute('aria-label','Segment playback speed');
-  for(const [v,t]of [['1','1× speed'],['0.5','0.5× speed']])speed.add(new Option(t,v));
+  const controls=el('div',null,'buttons'),play=el('button','Play'),speed=el('select');play.setAttribute('aria-label','Play segment');speed.setAttribute('aria-label','Segment playback speed');
+  for(const [v,t]of [['1','1×'],['0.5','0.5×']])speed.add(new Option(t,v));
   controls.append(play,speed);
   const seek=el('input');seek.type='range';seek.min=0;seek.max=Math.max(0,frames.length-1);seek.step=1;seek.value=0;seek.setAttribute('aria-label','Segment position');
   const status=el('p',null,'hint');status.setAttribute('role','status');root.append(pair,controls,seek,status);
   let index=0,disposed=false,playing=false,timer=null,token=0;
-  function pause(){playing=false;clearTimeout(timer);play.textContent='Play segment';}
+  function pause(){playing=false;clearTimeout(timer);play.textContent='Play';play.setAttribute('aria-label','Play segment');}
   async function draw(){
     const t=++token,f=frames[index],entry=clip.reviewFrames.find(e=>e.sourceIndex===f.sourceIndex);
     let image;if(!entry){status.textContent='Saved frame unavailable.';pause();return;}
@@ -48,13 +48,13 @@ export function createSegmentPreview({clip,report,segment,onChoose=()=>{},disabl
     if(disposed||t!==token){image.close();return;}
     const e=f[segment.side],original=selectedFrame(f.sample,f,'original')[segment.side],proposal=selectedFrame(f.sample,f,'proposal')[segment.side];
     drawEyeCrop(cards[0].canvas,image,original,e.original);drawEyeCrop(cards[1].canvas,image,proposal,e.original,!!e.proposal);
-    cards[0].caption.textContent=value(original);cards[1].caption.textContent=proposal?(e.proposal?'~ ':'')+value(proposal):'Unresolved · no replacement';
-    seek.value=index;status.textContent=f.time.toFixed(3)+' s · '+(e.proposal?e.proposal.method:e.flagged?'Insufficient evidence':'Original retained');
+    cards[0].caption.textContent=original?.valid?'':'Unmeasured';cards[1].caption.textContent=proposal?(e.proposal?'Estimate':'Unchanged'):'Unresolved';
+    seek.value=index;status.textContent=f.time.toFixed(2)+' s';
     image.close();
     if(playing){if(index===frames.length-1){pause();return;}
       const delay=Math.max(20,(frames[index+1].time-f.time)*1000/Number(speed.value));timer=setTimeout(()=>{index++;draw();},delay);}
   }
-  play.onclick=()=>{if(playing){pause();return;}if(index===frames.length-1)index=0;playing=true;play.textContent='Pause segment';draw();};
+  play.onclick=()=>{if(playing){pause();return;}if(index===frames.length-1)index=0;playing=true;play.textContent='Pause';play.setAttribute('aria-label','Pause segment');draw();};
   seek.oninput=()=>{pause();index=Number(seek.value);draw();};speed.onchange=()=>{if(playing){clearTimeout(timer);draw();}};
   draw();return {element:root,pause,dispose(){disposed=true;token++;pause();}};
 }
@@ -93,18 +93,18 @@ export function makeReviewRenderer(clip,report,version='selected'){
 export function createReviewedPlayer({clip,report,clipNumber}){
   const root=el('section',null,'reviewed-playback'),title=el('h3','Full video comparison');
   const select=el('select');select.setAttribute('aria-label','Full video version');
-  select.add(new Option('Original tracking','original'));select.add(new Option('Reviewed tracking · Your choices','selected'));
+  select.add(new Option('Original','original'));select.add(new Option('Reviewed','selected'));
   const video=el('video');video.muted=true;video.playsInline=true;video.preload='metadata';video.className='repair-decoder';video.tabIndex=-1;video.setAttribute('aria-hidden','true');
   const canvas=el('canvas');Object.assign(canvas,reviewedVideoSize(clip.data));canvas.setAttribute('aria-label','Clip '+clipNumber+' full review video');
-  const controls=el('div',null,'buttons'),play=el('button','Play full video');controls.append(play);
+  const controls=el('div',null,'buttons'),play=el('button','Play');play.setAttribute('aria-label','Play full video');controls.append(play);
   const seek=el('input');seek.type='range';seek.min=0;seek.max=clip.data.recording.durationSeconds;seek.step=.01;seek.value=0;seek.setAttribute('aria-label','Full video time');
-  const status=el('p','Switch versions at the same time to compare.','hint');
-  root.append(title,select,canvas,video,controls,seek,status);
+  const status=el('p',null,'hint');status.setAttribute('role','status');
+  root.append(select,canvas,video,controls,seek,status);
   let render=makeReviewRenderer(clip,report,'original'),raf=null,disposed=false;
   const draw=()=>{if(disposed)return;render(canvas.getContext('2d'),video,video.currentTime);seek.value=video.currentTime;};
   function loop(){draw();if(!video.paused&&!video.ended&&!disposed)raf=requestAnimationFrame(loop);}
-  function pause(){video.pause();cancelAnimationFrame(raf);play.textContent='Play full video';}
-  play.onclick=async()=>{if(!video.paused){pause();return;}try{if(video.ended)video.currentTime=0;await video.play();if(disposed)return;play.textContent='Pause full video';loop();}catch(e){status.textContent='Cannot play video: '+e.message;}};
+  function pause(){video.pause();cancelAnimationFrame(raf);play.textContent='Play';play.setAttribute('aria-label','Play full video');}
+  play.onclick=async()=>{if(!video.paused){pause();return;}try{if(video.ended)video.currentTime=0;await video.play();if(disposed)return;play.textContent='Pause';play.setAttribute('aria-label','Pause full video');loop();}catch(e){status.textContent='Cannot play video: '+e.message;}};
   select.onchange=()=>{render=makeReviewRenderer(clip,report,select.value);draw();};
   seek.oninput=()=>{pause();video.currentTime=Number(seek.value);};
   video.onloadeddata=draw;video.onseeked=draw;video.onended=()=>{pause();draw();};

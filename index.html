@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Gaze Lab · Eye Tracking & NIHSS</title><link rel="icon" href="data:,"><link rel="stylesheet" href="./style.css?v=mobile9"><link rel="stylesheet" href="./mobile.css"><meta name="description" content="Eye Tracking & NIHSS Gaze — browser-based research app by Honghao Zhao."><link rel="stylesheet" href="./mobile-shell.css?v=mobile9"></head>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Gaze Lab · Eye Tracking & NIHSS</title><link rel="icon" href="data:,"><link rel="stylesheet" href="./style.css?v=clean10"><link rel="stylesheet" href="./mobile.css"><meta name="description" content="Eye Tracking & NIHSS Gaze — browser-based research app by Honghao Zhao."><link rel="stylesheet" href="./mobile-shell.css?v=clean10"></head>
 <body>
 <header><div><span class="eyebrow">HONGHAO ZHAO · RESEARCH PROTOTYPE</span><h1>Eye Tracking & NIHSS Gaze</h1><p>Video → Head-pose correction → Movement evidence → Examiner review</p></div><a href="./guide.html">Guide ↗</a></header>
 <nav class="mobile-nav" aria-label="Quick navigation"><a href="#settings">Input</a><a href="#live">Live view</a><a href="#recordings">Clip</a><a href="#assessment">Review</a></nav><main>
 <div class="notice">Research prototype · Video and processing stay on this device. Eye metrics and thresholds are not patient-validated. NIHSS scores map examiner observations.</div>
 <section class="workspace">
 <aside class="card" id="settings">
-  <h2>01 / Input & setup</h2>
+  <h2>Setup</h2>
   <label for="cameraFacing">Camera (stop before switching)</label><select id="cameraFacing"><option value="user">Front camera / selfie</option><option value="environment">Rear camera</option></select><div class="buttons"><button id="cameraStart" class="primary">Start camera</button><button id="stop" disabled>Stop</button></div>
   <label class="check"><input id="previewFlip" type="checkbox" checked>Flip front-camera preview</label>
   <p class="hint">Display only. Eye markers follow the picture; measurements and saved videos keep their original orientation.</p>
@@ -34,7 +34,7 @@
 </aside>
 <div class="measurements">
   <div class="card camera-card" id="live">
-    <div class="card-heading"><h2>02 / Independent eye tracking</h2><span id="sourceBadge" class="badge">No input</span></div>
+    <div class="card-heading"><h2>Live view</h2><span id="sourceBadge" class="badge">No input</span></div>
     <div class="stage"><video id="video" playsinline muted controls hidden></video><canvas id="overlay" width="1280" height="720"></canvas><div id="empty">Start the camera, import a video,<br>or try a synthetic demo</div></div>
   <label for="phase">Live exam phase</label>
   <select id="phase"><option value="unlabelled">Unlabelled / preparation</option><option value="center">Center / rest</option><option value="left">Look to subject-left</option><option value="right">Look to subject-right</option><option value="reflex">Clinical reflex exam (record only)</option></select>
@@ -44,8 +44,8 @@
     <div class="record-bar"><div class="buttons"><button id="recordStart" disabled>● Start recording</button><button id="recordStop" disabled>Stop recording</button></div><span id="recordIndicator" role="status">Start the camera to record movement and eye positions.</span></div>
     <p class="hint">Records raw video and an analysis video with eye measurements. Camera only, no audio. Replay and download below.</p>
     <div class="metrics">
-      <div><span>Subject left eye · Corrected</span><b id="leftValue">—</b><small id="leftQuality" class="eye-quality">Waiting</small></div>
-      <div><span>Subject right eye · Corrected</span><b id="rightValue">—</b><small id="rightQuality" class="eye-quality">Waiting</small></div>
+      <div><span>Left eye</span><b id="leftValue">—</b><small id="leftQuality" class="eye-quality">Waiting</small></div>
+      <div><span>Right eye</span><b id="rightValue">—</b><small id="rightQuality" class="eye-quality">Waiting</small></div>
       <div><span>Head yaw / pitch / roll</span><b id="headValue">—</b></div>
       <div><span>Valid / total samples</span><b id="coverageValue">0 / 0</b></div>
     </div>
@@ -62,7 +62,7 @@
   <div id="recordingList"></div>
 </section>
 <section class="card assessment" id="assessment">
-  <div><h2>04 / NIHSS Best Gaze review</h2><p class="hint">Horizontal gaze only. Enter actual examiner observations. Missing or conflicting evidence is shown explicitly.</p>
+  <div><h2>NIHSS Best Gaze</h2><p class="hint">Horizontal gaze only. Enter actual examiner observations. Missing or conflicting evidence is shown explicitly.</p>
     <div class="form-grid">
       <div><label for="reviewer">Examiner ID</label><input id="reviewer" type="text" maxlength="80" placeholder="Do not enter patient identifiers"></div>
       <div><label for="examAdequate">Was horizontal gaze adequately examined?</label><select id="examAdequate"><option value="unknown">Not confirmed</option><option value="yes">Yes, confirmed by examiner</option><option value="no">No / uncertain</option></select></div>
@@ -76,4 +76,4 @@
 </section>
 <section class="card exports"><div><h2>Export full session</h2><p class="hint">Export measurements and decisions for the full session here. Use the clip buttons above for individual recordings and their data.</p></div><div class="buttons"><button id="exportJson" disabled>Export JSON</button><button id="exportCsv" disabled>Export CSV</button><a class="button" href="./guide.html">Methods & instructions ↗</a></div></section>
 <footer>Gaze Lab v0.2.1 · Planar pose correction · Independent eyes · No initial-gaze zeroing · Local processing</footer>
-</main><script type="module" src="./app.js?v=mobile9"></script><script type="module" src="./english-ui.js"></script><script type="module" src="./mobile-shell.js?v=mobile9"></script></body></html>
+</main><script type="module" src="./app.js?v=clean10"></script><script type="module" src="./english-ui.js"></script><script type="module" src="./mobile-shell.js?v=clean10"></script></body></html>

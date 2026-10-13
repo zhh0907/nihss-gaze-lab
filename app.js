@@ -1,12 +1,12 @@
 import {cameraOrientation} from './camera-orientation.js';
-import {runSelfCheck} from './self-check.js?v=mobile9';
-import {createSelfCheckUI} from './self-check-ui.js?v=mobile9';
+import {runSelfCheck} from './self-check.js?v=clean10';
+import {createSelfCheckUI} from './self-check-ui.js?v=clean10';
 import {simplifyUI} from './simplify-ui.js';
 import {eyeUsable,eyeQualityLabel} from './eye-quality.js';
 import {DEFAULTS,VERSION,measureFrame,DisplayFilter} from './geometry.js?v=quality5';
 import {parseIntervals,phaseAt,summarize,scoreNIHSS} from './assessment.js';
 import {demoInput} from './fixtures.js';
-import {GazeRecorder,drawEyeMarkers,extensionFor,recordingCsv,recordingMime} from './recording.js?v=mobile9';
+import {GazeRecorder,drawEyeMarkers,extensionFor,recordingCsv,recordingMime} from './recording.js?v=clean10';
 import {convertVideo} from './video-export.js?v=repair6';
 import {startLiveLoop} from './live-loop.js?v=live3';
 import {captureVideoFrame,bitmapWithDeadline} from './frame-capture.js?v=live3';
@@ -158,7 +158,7 @@ function accept(result,t,phase,phaseStartValue,inferenceMs=null,truth=null){
   drawOverlay(sample,width,height);
   if(frameNo++%5===0){updateSummary();drawTrace();}
   const reasons=[...measured.reasons,...(measured.left?.reasons??[]),...(measured.right?.reasons??[])];
-  status(`${source==='demo'?'Synthetic demo · ':''}${t.toFixed(2)} s · ${phaseNames[phase]} · ${measured.valid?'Both eyes valid':Array.from(new Set(reasons)).map(r=>reasonNames[r]??r).join(' / ')}${inferenceMs===null?'':` · inference ${inferenceMs.toFixed(0)} ms`}`);
+  status(`${source==='demo'?'Demo · ':''}${measured.valid?'Eyes tracked':Array.from(new Set(reasons)).map(r=>reasonNames[r]??r).join(' / ')}`);
   return sample;
 }
 function previewFlipped(){return source==='camera' && cameraOrientation($('cameraFacing').value,sourceInfo.settings,$('previewFlip').checked).previewMirrored;}
@@ -356,7 +356,7 @@ function renderRecordings(){
   for(const [i,clip] of recordedClips.entries()){
     clip.analysisUrl??=URL.createObjectURL(clip.analysis);clip.rawUrl??=URL.createObjectURL(clip.raw);
     const {recording:r}=clip.data,details=document.createElement('details');details.className='recorded-clip';details.dataset.recordingId=r.id;details.open=i===recordedClips.length-1;
-    const title=document.createElement('summary');title.textContent=`Clip ${i+1} · ${r.durationSeconds.toFixed(1)} s · ${clip.data.samples.length} analysis frames`;details.append(title);
+    const title=document.createElement('summary');title.textContent=`Clip ${i+1} · ${r.durationSeconds.toFixed(1)} s`;details.append(title);
     const player=document.createElement('video');player.controls=true;player.playsInline=true;player.preload='metadata';player.src=clip.analysisUrl;player.className='recording-preview';player.setAttribute('aria-label',`Clip ${i+1} Replay`);
     const playbackBox=document.createElement('details'),playbackTitle=document.createElement('summary');playbackTitle.textContent='Replay video';playbackBox.append(playbackTitle);
     const label=document.createElement('label');label.textContent='Playback version';const select=document.createElement('select');select.setAttribute('aria-label',`Clip ${i+1} Playback version`);
@@ -408,18 +408,18 @@ function renderRecordings(){
     deleteYes.onclick=()=>{
       if(activeConversion)return;
       clip.checkController?.abort();clip.checkUi?.dispose();clip.repairUi?.dispose();player.pause();downloadDialog.remove();URL.revokeObjectURL(clip.analysisUrl);URL.revokeObjectURL(clip.rawUrl);recordedClips=recordedClips.filter(c=>c!==clip);renderRecordings();refreshRecordingControls();};
-    const downloads=document.createElement('details'),downloadTitle=document.createElement('summary');downloadTitle.textContent='Original files & other formats';downloads.append(downloadTitle,exportLabel,exportFormat,buttons,exportStatus,cancel,readyDownload,hint);
+    const downloads=document.createElement('details'),downloadTitle=document.createElement('summary');downloadTitle.textContent='More files';downloads.append(downloadTitle,exportLabel,exportFormat,buttons,exportStatus,cancel,readyDownload,hint);
     const downloadDialog=document.createElement('dialog');downloadDialog.className='clip-download-dialog';downloadDialog.setAttribute('aria-label',`Clip ${i+1} downloads`);
     const downloadHead=document.createElement('div');downloadHead.className='download-heading';
     const downloadHeading=document.createElement('h3');downloadHeading.textContent=`Clip ${i+1} downloads`;
     const closeDownload=document.createElement('button');closeDownload.textContent='Close';closeDownload.setAttribute('aria-label','Close downloads');closeDownload.onclick=()=>downloadDialog.close();downloadHead.append(downloadHeading,closeDownload);
-    const quick=document.createElement('button');quick.textContent='↓ Download original video';quick.className='primary';quick.onclick=()=>saveBlob(clip.analysis,`${base}_analysis.${extensionFor(clip.analysis.type)}`);
+    const quick=document.createElement('button');quick.textContent='↓ Original video';quick.setAttribute('aria-label','Download original video');quick.className='primary';quick.onclick=()=>saveBlob(clip.analysis,`${base}_analysis.${extensionFor(clip.analysis.type)}`);
     downloadDialog.append(downloadHead,quick,checkUi.downloadElement,downloads);
     const toolbar=document.createElement('div');toolbar.className='clip-toolbar';
     const downloadButton=document.createElement('button');downloadButton.textContent='↓ Download';downloadButton.className='primary';downloadButton.setAttribute('aria-label',`Download clip ${i+1}`);
     downloadButton.onclick=()=>{checkUi.pause();player.pause();downloadDialog.showModal();};toolbar.append(downloadButton,remove);
     details.addEventListener('toggle',()=>{if(!details.open){checkUi.pause();player.pause();}});
-    playbackTitle.textContent='Original recording files';
+    playbackTitle.textContent='Original files';
     playbackBox.append(label,select,player);details.append(toolbar,deleteConfirm,checkUi.element,playbackBox,downloadDialog);list.append(details);
   }
   $('recordingsLimit').hidden=recordedClips.length<3;

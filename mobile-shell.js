@@ -12,7 +12,7 @@ function initialize() {
   const el = (tag, className, text) => {const n=document.createElement(tag);n.className=className;if(text)n.textContent=text;return n;};
   const shell = el('div','mobile-app');shell.id='mobileApp';shell.hidden=true;shell.dataset.app=simulator?'simulator':'gaze';
   const top = el('div','app-topbar');
-  const brand = el('div','app-brand');brand.append(el('strong','',simulator?'Motion Lab':'Gaze Lab'),el('span','',simulator?'Hand → eyes':'Eye tracking · Research'));
+  const brand = el('div','app-brand');brand.append(el('strong','',simulator?'Motion Lab':'Gaze Lab'));if(simulator)brand.append(el('span','','Hand → eyes'));
   const menu = el('button','app-menu','☰ Tools');menu.type='button';menu.setAttribute('aria-haspopup','dialog');menu.setAttribute('aria-controls','appDrawer');
   top.append(brand,menu);
   const workspace=el('div','app-workspace');workspace.setAttribute('aria-label','Live workspace');

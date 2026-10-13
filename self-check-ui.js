@@ -1,6 +1,6 @@
-import {chooseSegment,segmentCsv} from './segment-review.js?v=mobile9';
-import {createSegmentPreview,createReviewedPlayer,makeReviewRenderer,reviewedVideoSize} from './segment-player.js?v=mobile9';
-import {createEyeMotionPlayer,makeEyeMotionRenderer,clipGazeSuggestion,reviewedSamples,EYE_VIDEO_SIZE} from './eye-motion.js?v=mobile9';
+import {chooseSegment,segmentCsv} from './segment-review.js?v=clean10';
+import {createSegmentPreview,createReviewedPlayer,makeReviewRenderer,reviewedVideoSize} from './segment-player.js?v=clean10';
+import {createEyeMotionPlayer,makeEyeMotionRenderer,clipGazeSuggestion,reviewedSamples,EYE_VIDEO_SIZE} from './eye-motion.js?v=clean10';
 import {parseIntervals,NIHSS_SOURCE} from './assessment.js';
 import {recordingMime,extensionFor} from './recording.js';
 import {convertVideo} from './video-export.js';
@@ -18,7 +18,7 @@ export function createSelfCheckUI({clip,clipNumber,retry,saveBlob,busyMessage=()
   const body=el('div');body.hidden=true;root.append(status,actions,body);
   const downloads=el('section');downloads.append(el('p','Reviewed downloads appear after the local check.','hint'));
   let disposed=false,position=0,builtReport=null,preview=null,player=null,eyes=null,progress,jump,panels,controller=null,
-    result,contextFields=[],tabs=[],views={},activeView=clip.reviewView??'review',invalidateVideo=()=>{},exportButtons=[];
+    result,exportHint,contextFields=[],tabs=[],views={},activeView=clip.reviewView??'review',invalidateVideo=()=>{},exportButtons=[];
   function summary(){const r=clip.checkReport;progress.textContent=`${r.segments.filter(s=>s.decision!=='unreviewed').length} / ${r.segments.length} reviewed`;}
   function showView(name){
     activeView=name;clip.reviewView=name;preview?.pause();player?.pause();eyes?.pause();
@@ -33,10 +33,10 @@ export function createSelfCheckUI({clip,clipNumber,retry,saveBlob,busyMessage=()
     const r=clip.checkReport,segments=r.segments;position=Math.max(0,Math.min(position,segments.length-1));jump.replaceChildren();
     for(const [i,s]of segments.entries())jump.add(new Option(`${i+1}/${segments.length} · ${s.side==='left'?'Left':'Right'} · ${s.start.toFixed(1)}–${s.end.toFixed(1)} s${s.decision==='unreviewed'?'':' ✓'}`,String(i)));
     jump.value=String(position);jump.disabled=!segments.length;const segment=segments[position];
-    if(!segment){panels.append(el('p','No suspicious segments found. Open Eye motion to view the result.','hint'));summary();return;}
+    if(!segment){panels.append(el('p','No segments to review.','hint'));summary();return;}
     preview=createSegmentPreview({clip,report:r,segment,onChoose:choose,disabled:!!controller});panels.append(preview.element);
-    const coverage=el('p',`${segment.proposedCount}/${segment.flaggedIndices.length} replacements${segment.unresolvedCount?` · ${segment.unresolvedCount} remain unmeasured`:''}`,'hint compact-coverage');
-    const footer=el('div',null,'review-footer'),uncertain=el('button','Leave unresolved'),reset=el('button','Undo');
+    const coverage=el('p',`${segment.proposedCount} suggested${segment.unresolvedCount?` · ${segment.unresolvedCount} unresolved`:''}`,'hint compact-coverage');
+    const footer=el('div',null,'review-footer'),uncertain=el('button','Unresolved'),reset=el('button','Undo');
     uncertain.disabled=!!controller;uncertain.setAttribute('aria-pressed',String(segment.decision==='uncertain'));uncertain.onclick=()=>choose('uncertain');
     reset.disabled=segment.decision==='unreviewed'||!!controller;reset.onclick=()=>choose('unreviewed');footer.append(uncertain,reset);
     const evidence=el('details',null,'review-reasons');evidence.append(el('summary',segment.decision==='uncertain'?'Marked unresolved · Details':'Details'),el('p',segment.reasons.join(' · '),'hint'),
@@ -45,22 +45,27 @@ export function createSelfCheckUI({clip,clipNumber,retry,saveBlob,busyMessage=()
   }
   function updateResult(){
     if(!result)return;const r=clipGazeSuggestion(clip,clip.checkReport);result.replaceChildren();
-    result.append(el('h4',r.title),el('p',r.reasons[0]??'Review the horizontal gaze examination.','hint'));
-    const more=el('details');more.append(el('summary','Score reasons & evidence'));
-    const list=el('ul');for(const reason of r.reasons.slice(1))list.append(el('li',reason));more.append(list,el('p',r.limitation,'hint'));
+    const title=r.score!==null?`NIHSS · ${r.score}`:r.pending?'NIHSS · Review needed':r.clinical?'NIHSS · Incomplete':!r.evidence.adequate?'NIHSS · Not ready':r.candidates.length===1?'NIHSS · Possible 0':'NIHSS · Review 1–2';
+    const short=r.pending?`Review ${r.pending} remaining segments.`:r.score!==null?'Based on examiner findings.':r.clinical?'Complete examiner findings.':!r.evidence.adequate?'Check exam phases and coverage.':'Clinician confirmation needed.';
+    result.append(el('h4',title),el('p',short,'hint'));
+    if(r.clinical&&clip.clinicalObservation?.finding==='normal'&&r.evidence.flags.length)result.append(el('p','Video and clinical findings differ.','warning'));
+    const more=el('details');more.append(el('summary','Details'));
+    const list=el('ul');for(const reason of r.reasons)list.append(el('li',reason));more.append(list,el('p',r.limitation,'hint'),
+      el('p','The diagram fixes eye width and removes the head image. Pose compensation is approximate; missing positions stay blank. Left/right refer to the subject.','hint'));
     const rules=el('p','0: normal. 1: partial palsy or an overcome deviation. 2: forced deviation / total paresis not overcome by the oculocephalic reflex. A clinician must establish the applicable findings.','hint');
     const source=el('a','NIHSS instructions ↗');source.href=NIHSS_SOURCE;source.target='_blank';source.rel='noreferrer';more.append(rules,source);result.append(more);
     exportButtons.forEach(b=>b.disabled=!!controller||r.pending>0||!b.dataset.available);
+    if(exportHint)exportHint.textContent=r.pending?'Finish review to export.':'';
   }
   function buildContext(){
-    const box=el('details',null,'exam-context');box.append(el('summary','Exam phases & clinical confirmation'));
+    const box=el('details',null,'exam-context');box.append(el('summary','Exam details'));
     const phases=el('textarea');phases.rows=3;phases.spellcheck=false;phases.setAttribute('aria-label','Clip exam phase intervals');
     phases.placeholder='Seconds from clip start, for example:\n0 2 center\n2 5 left\n5 8 right';phases.value=(clip.reviewIntervals??[]).map(r=>`${r.start} ${r.end} ${r.phase}`).join('\n');
-    const note=el('p','Use actual target times in this clip (subject-left/right). Blank keeps the recorded phase labels.','hint'),apply=el('button','Apply phase labels'),error=el('p',null,'hint');error.setAttribute('role','status');
+    const note=el('p','Clip times; subject-left/right. Leave blank to keep recorded labels.','hint'),apply=el('button','Apply'),error=el('p',null,'hint');apply.setAttribute('aria-label','Apply phase labels');error.setAttribute('role','status');
     apply.onclick=()=>{try{const text=phases.value.trim();clip.reviewIntervals=text?parseIntervals(text,clip.data.recording.durationSeconds):null;error.textContent='Phase labels saved for this clip.';changed();}catch(e){error.textContent=e.message;}};
     box.append(note,phases,apply,error);
     const o=clip.clinicalObservation??={reviewer:'',examAdequate:'unknown',finding:'unknown',overcome:'unknown',reflexAssessed:'unknown'};
-    const clinical=el('details');clinical.append(el('summary','Add examiner findings'));
+    const clinical=el('details');clinical.append(el('summary','Clinician findings'));
     const id=el('input');id.value=o.reviewer;id.maxLength=80;id.placeholder='Examiner ID (no patient name)';id.setAttribute('aria-label','Clip examiner ID');
     const adequate=field('Adequate horizontal exam',[['unknown','Not confirmed'],['yes','Confirmed by examiner'],['no','No / uncertain']],o.examAdequate);
     const finding=field('Examiner finding',[['unknown','Use video suggestion only'],['normal','Normal horizontal gaze'],['partial','Partial palsy; no forced deviation / total paresis'],['deviation','Conjugate deviation'],['total-paresis','Total gaze paresis'],['isolated-nerve','Isolated CN III / IV / VI palsy']],o.finding);
@@ -77,15 +82,15 @@ export function createSelfCheckUI({clip,clipNumber,retry,saveBlob,busyMessage=()
   }
   function buildDownloads(){
     downloads.replaceChildren();exportButtons=[];
-    const format=field('Reviewed download format',['mp4','webm'].map(f=>[f,f.toUpperCase()]),'mp4');
+    const format=field('Format',['mp4','webm'].map(f=>[f,f.toUpperCase()]),'mp4');format.input.setAttribute('aria-label','Reviewed download format');
     for(const o of format.input.options)o.disabled=!recordingMime(globalThis.MediaRecorder,o.value);
     format.input.value=Array.from(format.input.options).find(o=>!o.disabled)?.value??'';
     const buttons=el('div',null,'buttons'),stop=el('button','Cancel export'),save=el('button');stop.hidden=save.hidden=true;
-    const exportStatus=el('p','Finish segment choices to save a reviewed video or the eye-only animation.','hint');exportStatus.setAttribute('role','status');
+    const exportStatus=el('p',null,'hint');exportStatus.setAttribute('role','status');exportHint=el('p',null,'hint');
     invalidateVideo=()=>{if(!save.hidden){save.hidden=true;save.onclick=null;exportStatus.textContent='Choices or exam details changed. Prepare a new download.';}};
     const base='gaze_recording_'+clip.data.recording.id.slice(0,8);
-    for(const [mode,label]of [['reviewed','Prepare reviewed video'],['eyes','Prepare eye-only video']]){
-      const button=el('button',label);button.dataset.available=format.input.value?'yes':'';exportButtons.push(button);buttons.append(button);
+    for(const [mode,label]of [['reviewed','Reviewed video'],['eyes','Eye-only video']]){
+      const button=el('button',label);button.setAttribute('aria-label',mode==='eyes'?'Prepare eye-only video':'Prepare reviewed video');button.dataset.available=format.input.value?'yes':'';exportButtons.push(button);buttons.append(button);
       button.onclick=async()=>{
         const busy=busyMessage();if(busy){exportStatus.textContent=busy;return;}
         if(clip.checkReport.segments.some(s=>s.decision==='unreviewed'))return;
@@ -107,7 +112,7 @@ export function createSelfCheckUI({clip,clipNumber,retry,saveBlob,busyMessage=()
     json.onclick=()=>saveBlob(new Blob([JSON.stringify({schema:'gaze-reviewed-motion-3',original:clip.data,review:clip.checkReport,
       reviewedSamples:reviewedSamples(clip,clip.checkReport),phaseOverrides:clip.reviewIntervals??null,clinicalObservation:clip.clinicalObservation??null,suggestion:clipGazeSuggestion(clip,clip.checkReport)},null,2)],{type:'application/json'}),base+'_review.json');
     csv.onclick=()=>saveBlob(new Blob([segmentCsv(clip.checkReport)],{type:'text/csv;charset=utf-8'}),base+'_review.csv');
-    data.append(json,csv);downloads.append(el('h3','Reviewed results'),format.label,buttons,stop,save,exportStatus,data);
+    data.append(json,csv);downloads.append(format.label,buttons,exportHint,stop,save,exportStatus,data);
   }
   function build(){
     const r=clip.checkReport;body.replaceChildren();body.hidden=false;tabs=[];

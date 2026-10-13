@@ -1,8 +1,8 @@
-import {selectedFrame,sampleAtTime} from './segment-review.js?v=mobile9';
+import {selectedFrame,sampleAtTime} from './segment-review.js?v=clean10';
 import {summarize,scoreNIHSS,phaseAt,NIHSS_SOURCE} from './assessment.js';
 import {eyeUsable} from './eye-quality.js';
 
-export const EYE_VIDEO_SIZE=Object.freeze({width:960,height:420});
+export const EYE_VIDEO_SIZE=Object.freeze({width:960,height:300});
 
 // Work on copies. Clip-level phase edits never overwrite the recorded exam.
 export function reviewedSamples(clip,report,version='selected'){
@@ -93,13 +93,12 @@ export function clipGazeSuggestion(clip,report){
 
 export function drawEyeMotion(ctx,sample,time){
   const {width:w,height:h}=ctx.canvas,k=w/960;
-  ctx.save();ctx.scale(k,h/420);ctx.fillStyle='#0b1520';ctx.fillRect(0,0,960,420);
-  ctx.fillStyle='#e1eef4';ctx.font='32px system-ui';ctx.fillText('HORIZONTAL EYE MOTION',28,42);
-  ctx.fillStyle='#97b2c4';ctx.font='28px system-ui';ctx.fillText(`${time.toFixed(2)} s · ${sample?.phase??'No sample'}`,28,85);
+  ctx.save();ctx.scale(k,h/300);ctx.fillStyle='#0b1520';ctx.fillRect(0,0,960,300);
+  ctx.fillStyle='#97b2c4';ctx.font='25px system-ui';ctx.fillText(`${time.toFixed(2)} s`,820,34);
   const state=eyeDiagramState(sample);
   for(const [i,side]of ['right','left'].entries()){
-    const x=48+i*480,y=204,width=384,e=state[side],color=side==='right'?'#80baff':'#61dcc3';
-    ctx.fillStyle=color;ctx.font='32px system-ui';ctx.fillText(`Subject ${side} eye`,x,145);
+    const x=48+i*480,y=120,width=384,e=state[side],color=side==='right'?'#80baff':'#61dcc3';
+    ctx.fillStyle=color;ctx.font='34px system-ui';ctx.fillText(side==='right'?'Right eye':'Left eye',x,70);
     ctx.strokeStyle='#7592a6';ctx.lineWidth=4;ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+width,y);ctx.stroke();
     for(const p of [x,x+width]){ctx.beginPath();ctx.moveTo(p,y-12);ctx.lineTo(p,y+12);ctx.stroke();}
     ctx.strokeStyle='#496071';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x+width/2,y-7);ctx.lineTo(x+width/2,y+7);ctx.stroke();
@@ -110,12 +109,11 @@ export function drawEyeMotion(ctx,sample,time){
       if(e.kind==='estimated'){ctx.setLineDash([4,3]);ctx.lineWidth=4;ctx.stroke();ctx.setLineDash([]);}else ctx.fill();
     }
     ctx.fillStyle=e.kind==='estimated'?'#e4a0ff':'#c4d6e2';ctx.font='30px system-ui';
-    ctx.fillText(e.label+(e.position===null?'':` · ${e.position.toFixed(3)}`),x,262,400);
+    ctx.fillText(e.position===null?e.label:(e.kind==='estimated'?'~ ':'')+e.position.toFixed(3),x,179,400);
   }
   ctx.fillStyle='#96acbd';ctx.font='28px system-ui';
-  ctx.fillText('← Subject-right                   Subject-left →',28,329);
-  ctx.font='25px system-ui';ctx.fillText('Fixed eye width · Purple = accepted estimate',28,367);
-  ctx.fillText('Normalized, not degrees · Approximate pose correction',28,400);
+  ctx.fillText('← Subject-right                   Subject-left →',28,235);
+  ctx.font='25px system-ui';ctx.fillText('Purple = estimate · Normalized, not degrees',28,279);
   ctx.restore();
 }
 
@@ -128,15 +126,14 @@ const el=(tag,text)=>{const e=document.createElement(tag);if(text)e.textContent=
 export function createEyeMotionPlayer({clip,report}){
   const root=el('section'),canvas=el('canvas');root.className='eye-motion-player';Object.assign(canvas,EYE_VIDEO_SIZE);
   canvas.setAttribute('aria-label','Head-relative horizontal eye motion');
-  const row=el('div'),play=el('button','Play eye motion'),timeLabel=el('span');row.className='motion-controls';row.append(play,timeLabel);
+  const row=el('div'),play=el('button','Play'),timeLabel=el('span');play.setAttribute('aria-label','Play eye motion');row.className='motion-controls';row.append(play,timeLabel);
   const seek=el('input');seek.type='range';seek.min=0;seek.max=clip.data.recording.durationSeconds;seek.step=.01;seek.value=0;seek.setAttribute('aria-label','Eye motion time');
-  const note=el('p','Fixed eye-corner length; head-relative horizontal position. Gaps stay empty.');note.className='hint';
-  root.append(canvas,row,seek,note);
+  root.append(canvas,row,seek);
   let time=0,start=0,raf=null,playing=false,render=makeEyeMotionRenderer(clip,report);
   function draw(){render(canvas.getContext('2d'),null,time);seek.value=time;timeLabel.textContent=`${time.toFixed(1)} / ${Number(seek.max).toFixed(1)} s`;}
-  function pause(){playing=false;cancelAnimationFrame(raf);play.textContent='Play eye motion';}
+  function pause(){playing=false;cancelAnimationFrame(raf);play.textContent='Play';play.setAttribute('aria-label','Play eye motion');}
   function loop(now){time=Math.min(Number(seek.max),(now-start)/1000);draw();if(time>=Number(seek.max)){pause();return;}raf=requestAnimationFrame(loop);}
-  play.onclick=()=>{if(playing){pause();return;}if(time>=Number(seek.max))time=0;playing=true;start=performance.now()-time*1000;play.textContent='Pause eye motion';raf=requestAnimationFrame(loop);};
+  play.onclick=()=>{if(playing){pause();return;}if(time>=Number(seek.max))time=0;playing=true;start=performance.now()-time*1000;play.textContent='Pause';play.setAttribute('aria-label','Pause eye motion');raf=requestAnimationFrame(loop);};
   seek.oninput=()=>{pause();time=Number(seek.value);draw();};draw();
   return {element:root,pause,refresh(){render=makeEyeMotionRenderer(clip,report);draw();},dispose:pause};
 }

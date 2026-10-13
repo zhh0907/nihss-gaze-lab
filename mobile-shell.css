@@ -143,5 +143,15 @@ body.app-mode .recorded-clip>summary{margin:0;min-height:36px}
 .compact-review .review-progress{margin:0 0 5px}
 .clip-toolbar{padding:4px 0 8px}
 .clip-download-dialog button{width:100%}.download-heading button{width:auto}
+.track-choice{display:flex;flex-direction:column;justify-content:flex-start;align-items:stretch}
+.track-choice span:empty{display:none}.track-choice strong{min-height:34px}
+.compact-review .clip-score{padding:9px 11px}.compact-review .clip-score h4{font-size:15px;font-weight:600}
+.compact-review .clip-score>p{margin:2px 0}.compact-review .clip-score summary{min-height:32px}
+.compact-review .review-progress{font-size:10px;color:#a4bdc4}
+.compact-review .segment-preview>p{font-variant-numeric:tabular-nums;text-align:right}
+.eye-motion-player>canvas{margin-bottom:10px}
+body.app-mode #trackingHealth:not(.warning){display:none}
+body.app-mode #settings>h2{display:none}
+.clip-download-dialog .hint:empty{display:none}
 body.app-mode .drawer-content{padding:8px 10px 20px}
 @media(max-width:420px){.app-drawer{width:100vw;border-left:0}.compact-review{padding:8px}.track-choice strong{font-size:11px}.compact-review .check-pair{gap:6px}}
