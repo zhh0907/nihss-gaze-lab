@@ -1,0 +1,7 @@
+Third-party notices
+Three.js: MIT; see vendor/THREE-LICENSE.txt.
+MediaPipe Tasks Vision 0.10.32: Apache 2.0; see vendor/mediapipe/LICENSE.
+Official model source, version and SHA256: vendor/mediapipe/*PROVENANCE.json.
+SDK and model documentation: https://ai.google.dev/edge/mediapipe/solutions/vision
+Bundled unmodified vendor code and model assets are governed by their respective licenses.
+Research app by Honghao Zhao. No clinical or hardware accuracy guarantee.

@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Gaze Lab · Eye Tracking & NIHSS</title><link rel="icon" href="data:,"><link rel="stylesheet" href="./style.css"><link rel="stylesheet" href="./mobile.css"><meta name="description" content="Eye Tracking & NIHSS Gaze — browser-based research app by Honghao Zhao."></head>
+<body>
+<header><div><span class="eyebrow">HONGHAO ZHAO · RESEARCH PROTOTYPE</span><h1>Eye Tracking & NIHSS Gaze</h1><p>Video → Head-pose correction → Movement evidence → Examiner review</p></div><a href="./guide.html">Guide ↗</a></header>
+<nav class="mobile-nav" aria-label="Quick navigation"><a href="#settings">Input</a><a href="#live">Live view</a><a href="#recordings">Clip</a><a href="#assessment">Review</a></nav><main>
+<div class="notice">Research prototype · Video and processing stay on this device. Eye metrics and thresholds are not patient-validated. NIHSS scores map examiner observations.</div>
+<section class="workspace">
+<aside class="card" id="settings">
+  <h2>01 / Input & setup</h2>
+  <label for="cameraFacing">Camera (stop before switching)</label><select id="cameraFacing"><option value="user">Front camera / selfie</option><option value="environment">Rear camera</option></select><div class="buttons"><button id="cameraStart" class="primary">Start camera</button><button id="stop" disabled>Stop</button></div>
+  <label for="videoFile">Or import a phone video</label><input id="videoFile" type="file" accept="video/*">
+  <label class="check"><input id="inputMirrored" type="checkbox">Input is already mirrored; unmirror before analysis</label>
+  <p class="hint">Unmirrored display and analysis. Left/right refer to the subject. Eye position is normalized by half the eye width, not degrees.</p>
+  <div id="fileControls" hidden>
+    <label for="intervals">Video phases: start seconds / end seconds / phase</label>
+    <textarea id="intervals" rows="5" spellcheck="false" placeholder="Use actual video times, for example:&#10;0 2 center&#10;2 5 left&#10;5 7 center&#10;7 10 right"></textarea>
+    <p class="hint">Optional for trajectories; required for a complete exam summary. Preview the video and label actual times. No phase order is assumed.</p>
+    <button id="analyze" class="primary">Analyze video (15 samples/sec)</button>
+    <progress id="progress" value="0" max="1"></progress>
+  </div>
+  <details><summary>Research settings</summary>
+    <label for="fov">Vertical camera FOV (estimated degrees)</label><input id="fov" type="number" min="20" max="120" value="63" step="1">
+    <p class="hint">Camera intrinsics are estimated. Lens distortion, auto-cropping and 3D eye shape can leave residual errors.</p>
+    <p class="hint">Research limits: |yaw| ≤35°, |pitch| ≤25°, |roll| ≤35°; eye width ≥24 px. These are unvalidated defaults, not accuracy guarantees.</p>
+  </details>
+  <div class="separator"></div>
+  <label for="demoScenario">Try a synthetic scenario</label>
+  <select id="demoScenario"><option value="normal">Both eyes moving + head motion</option><option value="partial">One-eye directional limitation + head motion</option><option value="head-only">Head motion only; eyes fixed</option><option value="occluded">Occluded during left gaze</option></select>
+  <button id="demo">Run geometry demo</button>
+  <p class="hint">Synthetic landmarks test the workflow, bypassing the detector. Demo results do not establish clinical performance.</p>
+</aside>
+<div class="measurements">
+  <div class="card camera-card" id="live">
+    <div class="card-heading"><h2>02 / Independent eye tracking</h2><span id="sourceBadge" class="badge">No input</span></div>
+    <div class="stage"><video id="video" playsinline muted controls hidden></video><canvas id="overlay" width="1280" height="720"></canvas><div id="empty">Start the camera, import a video,<br>or try a synthetic demo</div></div>
+  <label for="phase">Live exam phase</label>
+  <select id="phase"><option value="unlabelled">Unlabelled / preparation</option><option value="center">Center / rest</option><option value="left">Look to subject-left</option><option value="right">Look to subject-right</option><option value="reflex">Clinical reflex exam (record only)</option></select>
+  <p class="hint">The examiner presents adequate left/right targets and marks phases. Phone screen edges do not cover the full gaze range. Reflex examination requires qualified clinical staff.</p>
+    <p id="status" role="status" aria-live="polite">The local model loads when needed.</p>
+    <div class="record-bar"><div class="buttons"><button id="recordStart" disabled>● Start recording</button><button id="recordStop" disabled>Stop recording</button></div><span id="recordIndicator" role="status">Start the camera to record movement and eye positions.</span></div>
+    <p class="hint">Records raw video and an analysis video with eye measurements. Camera only, no audio. Replay and download below.</p>
+    <div class="metrics">
+      <div><span>Subject left eye · Corrected</span><b id="leftValue">—</b></div>
+      <div><span>Subject right eye · Corrected</span><b id="rightValue">—</b></div>
+      <div><span>Head yaw / pitch / roll</span><b id="headValue">—</b></div>
+      <div><span>Valid / total samples</span><b id="coverageValue">0 / 0</b></div>
+    </div>
+  </div>
+  <div class="card"><div class="card-heading"><h2>Relative eye position</h2><span class="hint">+ = subject-left; 0 = midpoint between eye corners</span></div><canvas id="trace" height="190" aria-label="Eye positions over time"></canvas><p class="legend"><span class="left">● Left eye</span> <span class="right">● Right eye</span> Solid: pose-corrected · Dashed: 2D baseline · Gaps: invalid frames</p></div>
+  <div class="card"><h2>03 / Movement evidence</h2><div id="evidence">No measurements. Center, left and right phases are required.</div><div class="table-wrap"><table><thead><tr><th>Phase</th><th>Valid seconds</th><th>Coverage</th><th>Left median</th><th>Right median</th></tr></thead><tbody id="phaseTable"></tbody></table></div><p class="hint">The first 0.35 s of each phase is excluded from steady-state summaries. Limited movement, asymmetry and resting deviation are review flags, not NIHSS scores.</p></div>
+</div>
+</section>
+<section class="card recordings-panel" id="recordings">
+  <div class="card-heading"><h2>Recordings & replay</h2><span class="badge">Local only · No upload</span></div>
+  <p class="hint">Each clip includes both eye positions, head pose, phase labels and timestamps. Download before closing or refreshing. Switching input keeps existing clips.</p>
+  <p id="recordingsEmpty" class="hint">No clips yet. Start the camera, wait for detection, then select Start recording.</p>
+  <p id="recordingsLimit" class="warning" hidden>Up to 3 clips are kept in memory. Download and remove a clip to record another.</p>
+  <div id="recordingList"></div>
+</section>
+<section class="card assessment" id="assessment">
+  <div><h2>04 / NIHSS Best Gaze review</h2><p class="hint">Horizontal gaze only. Enter actual examiner observations. Missing or conflicting evidence is shown explicitly.</p>
+    <div class="form-grid">
+      <div><label for="reviewer">Examiner ID</label><input id="reviewer" type="text" maxlength="80" placeholder="Do not enter patient identifiers"></div>
+      <div><label for="examAdequate">Was horizontal gaze adequately examined?</label><select id="examAdequate"><option value="unknown">Not confirmed</option><option value="yes">Yes, confirmed by examiner</option><option value="no">No / uncertain</option></select></div>
+      <div><label for="finding">Clinical finding</label><select id="finding"><option value="unknown">Not confirmed</option><option value="normal">Normal horizontal gaze</option><option value="partial">Partial gaze palsy; no forced deviation or total paresis</option><option value="deviation">Conjugate deviation; assess whether overcome</option><option value="total-paresis">Total gaze paresis; assess whether overcome</option><option value="isolated-nerve">Isolated peripheral CN III / IV / VI palsy</option></select></div>
+      <div><label for="overcome">Can the deviation / limitation be overcome?</label><select id="overcome"><option value="unknown">Unknown / not applicable</option><option value="voluntary">Overcome by voluntary movement</option><option value="reflex">Overcome by reflex movement</option><option value="not-overcome">Cannot be overcome</option></select></div>
+      <div><label for="reflexAssessed">Was the applicable oculocephalic reflex examined by a clinician?</label><select id="reflexAssessed"><option value="unknown">Unknown / not applicable</option><option value="yes">Examined and recorded</option><option value="no">Not examined / not appropriate</option></select></div>
+      <div><label for="evidenceSource">Evidence source</label><select id="evidenceSource"><option value="video">Examiner observation + current video</option><option value="clinical">Independent clinical observation</option></select></div>
+    </div>
+  </div>
+  <div class="decision"><span class="eyebrow">Rule mapping · Clinical review required</span><div id="score">Needs review</div><div id="decisionText">No examination details entered.</div><a href="https://www.ninds.nih.gov/sites/default/files/documents/NIH-Stroke-Scale_updatedFeb2024_508.pdf" target="_blank" rel="noreferrer">Original NIHSS instructions ↗</a></div>
+</section>
+<section class="card exports"><div><h2>Export full session</h2><p class="hint">Export measurements and decisions for the full session here. Use the clip buttons above for individual recordings and their data.</p></div><div class="buttons"><button id="exportJson" disabled>Export JSON</button><button id="exportCsv" disabled>Export CSV</button><a class="button" href="./guide.html">Methods & instructions ↗</a></div></section>
+<footer>Gaze Lab v0.2 · Planar pose correction · Independent eyes · No initial-gaze zeroing · Local processing</footer>
+</main><script type="module" src="./app.js"></script><script type="module" src="./english-ui.js"></script></body></html>

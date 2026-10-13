@@ -1,0 +1,66 @@
+/* Shared touch layout; each standalone distribution carries its own copy. */
+html { scroll-padding-top: 72px; }
+body { padding-bottom: env(safe-area-inset-bottom); }
+main, section, aside, .card, .measurements, .panel, .form-grid > div { min-width: 0; }
+button, select, input, textarea { max-width: 100%; }
+button, select, .button, summary { min-height: 44px; }
+summary { display: list-item; align-content: center; }
+button, .button { touch-action: manipulation; }
+input[type=range] { min-height: 36px; }
+.mobile-nav { display: none; }
+#cameraFacing { margin-bottom: 10px; }
+.table-scroll { overflow-x: auto; max-width: 100%; }
+.table-scroll table { min-width: 560px; }
+#view > canvas { touch-action: none; }
+.view-tools { position: absolute; top: 42px; left: 12px; display: flex; gap: 6px; }
+.view-tools button { width: 44px; height: 44px; font-size: 21px; }
+.view-tools button:last-child { font-size: 13px; width: auto; }
+.mobile-help { color: #95aabd; font-size: 12px; line-height: 1.6; }
+.native-file-input { position: absolute; width: 1px !important; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.file-picker { display: flex; align-items: center; gap: 12px; margin: 8px 0; }
+.file-picker button { flex: 0 1 145px; }
+.file-picker span { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 12px; color: #95aabd; }
+@media (max-width: 760px), (pointer: coarse) {
+  select, input:not([type=range]):not([type=checkbox]), textarea { font-size: 16px !important; }
+  button, .button { min-height: 44px; }
+  input[type=checkbox] { min-width: 22px; min-height: 22px; }
+}
+@media (max-width: 760px) {
+  header { flex-wrap: wrap; padding: 18px 14px !important; }
+  header > div { min-width: 0; }
+  header > a { white-space: normal !important; }
+  h1 { overflow-wrap: anywhere; }
+  .mobile-nav { display: flex; position: sticky; z-index: 20; top: 0; gap: 6px;
+    padding: 8px max(10px, env(safe-area-inset-left)); background: #0b121af5;
+    border-bottom: 1px solid #304353; }
+  .mobile-nav a { display: grid; place-items: center; flex: 1; min-height: 44px;
+    font-size: 13px; text-decoration: none; border: 1px solid #385063; border-radius: 7px;
+    background: #192b3b; color: #c9f4e8; }
+  main { padding: 12px max(10px, env(safe-area-inset-left)) 28px !important; gap: 12px !important; }
+  aside, .panel, .card { padding: 14px !important; }
+  .row > *, .buttons > * { min-width: 0; }
+  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .metrics b { font-size: 18px; }
+  .record-bar .buttons { flex-basis: 100%; }
+  .recorded-clip .buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .recorded-clip .buttons button { min-width: 0; }
+  .exports .buttons { flex-wrap: wrap; }
+  .badge { white-space: normal; }
+  .legend, footer, .hint, .help, .note, #status, #cameraStatus { overflow-wrap: anywhere; }
+  .stage { max-height: none; }
+  #eyeFocus { height: 220px !important; }
+  #eyeFocus .caption { font-size: 12px; }
+  .eyeHint { right: 10px; font-size: 10px; }
+  .view { height: 310px; }
+  .caption { right: 10px; }
+  .inset { width: 135px !important; height: 90px !important; }
+  .stats { gap: 8px; grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .stat { padding: 10px; }
+  .stat b { font-size: 17px; }
+  .form-grid { grid-template-columns: 1fr; }
+  .workspace { grid-template-columns: 1fr; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .mobile-nav { position: static; }
+  html { scroll-padding-top: 12px; }
+}
