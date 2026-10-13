@@ -3,6 +3,8 @@ import {parseIntervals,phaseAt,summarize,scoreNIHSS} from './assessment.js';
 import {demoInput} from './fixtures.js';
 import {GazeRecorder,drawEyeMarkers,extensionFor,recordingCsv,recordingMime} from './recording.js?v=mobile2';
 import {convertVideo} from './video-export.js?v=mobile2';
+import {startLiveLoop} from './live-loop.js?v=live3';
+import {captureVideoFrame,bitmapWithDeadline} from './frame-capture.js?v=live3';
 
 // Non-camera demos still work on HTTP; camera access is checked separately.
 const sessionUUID=()=>globalThis.crypto?.randomUUID?.()??'session-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
@@ -15,7 +17,8 @@ function clearPreparedDownload(){preparedDownload?.();preparedDownload=null;}
 const video=$('video'),overlay=$('overlay'),filter=new DisplayFilter();
 let source='none',sourceInfo={},samples=[],summary=summarize([]),sessionId=sessionUUID();
 let config={...DEFAULTS},worker=null,stream=null,fileUrl=null,generation=0,running=false;
-let nextId=0,pending=new Map(),raf=0,videoCallback=null,startTime=0,phaseStart=0,frameNo=0;
+let nextId=0,pending=new Map(),stopLiveLoop=null,healthTimer=null,startTime=0,phaseStart=0,frameNo=0;
+let lastTrackingUpdate=0,recentUpdates=[];
 let intervals=[],captureCanvas=document.createElement('canvas');
 let clinicalHistory=[];
 let cameraReady=false,recordedClips=[];
@@ -35,6 +38,19 @@ const fmt=(v,n=3)=>Number.isFinite(v)?v.toFixed(n):'—';
 
 function observation(){return {reviewer:$('reviewer').value.trim(),examAdequate:$('examAdequate').value,finding:$('finding').value,overcome:$('overcome').value,reflexAssessed:$('reflexAssessed').value,useVideoEvidence:$('evidenceSource').value==='video'};}
 function status(message){$('status').textContent=message;}
+function trackingHealth(){
+  const now=performance.now(),age=lastTrackingUpdate?now-lastTrackingUpdate:now-startTime;
+  recentUpdates=recentUpdates.filter(t=>now-t<1000);
+  if(age>1500){
+    $('trackingHealth').textContent=`Tracking delayed · no update for ${(age/1000).toFixed(1)} s`;
+    $('trackingHealth').classList.add('warning');
+    $('leftValue').textContent=$('rightValue').textContent=$('headValue').textContent='—';
+    filter.reset();overlay.getContext('2d').clearRect(0,0,overlay.width,overlay.height);
+  }else{
+    $('trackingHealth').textContent=lastTrackingUpdate?`Tracking · ${samples.length} updates · ${recentUpdates.length} / s`:'Waiting for the first eye-tracking result…';
+    $('trackingHealth').classList.remove('warning');
+  }
+}
 function setRunning(value){
   running=value;
   for(const id of ['cameraStart','cameraFacing','videoFile','demo','demoScenario','fov','inputMirrored','intervals']) $(id).disabled=value;
@@ -48,6 +64,7 @@ function resetClinical(){
 }
 function clearMeasurements(){
   samples=[];summary=summarize([]);filter.reset();sessionId=sessionUUID();resetClinical();
+  $('trackingHealth').hidden=source!=='camera';$('trackingHealth').textContent='Waiting for eye tracking…';$('trackingHealth').classList.remove('warning');
   $('exportJson').disabled=true;$('exportCsv').disabled=true;
   $('leftValue').textContent=$('rightValue').textContent=$('headValue').textContent='—';
   $('coverageValue').textContent='0 / 0';$('progress').value=0;updateSummary();drawTrace();
@@ -58,8 +75,8 @@ function disposeWorker(){
 }
 function stop(){
   recording.stop('camera-stopped');cameraReady=false;
-  generation++;cancelAnimationFrame(raf);disposeWorker();
-  if(videoCallback!==null){video.cancelVideoFrameCallback?.(videoCallback);videoCallback=null;}
+  generation++;stopLiveLoop?.();stopLiveLoop=null;clearInterval(healthTimer);healthTimer=null;disposeWorker();
+  if(source==='camera')$('trackingHealth').textContent=`Tracking stopped · ${samples.length} updates`;
   stream?.getTracks().forEach(t=>t.stop());stream=null;
   video.pause();if(video.srcObject)video.srcObject=null;video.controls=source==='file';
   setRunning(false);filter.reset();updateSummary();
@@ -102,10 +119,7 @@ async function initWorker(token){
 }
 async function bitmap(){
   // Canonical, unmirrored coordinates throughout; never swap anatomical eyes.
-  if(!$('inputMirrored').checked)return createImageBitmap(video);
-  captureCanvas.width=video.videoWidth;captureCanvas.height=video.videoHeight;
-  const ctx=captureCanvas.getContext('2d');ctx.translate(captureCanvas.width,0);ctx.scale(-1,1);ctx.drawImage(video,0,0);
-  return createImageBitmap(captureCanvas);
+  return captureVideoFrame(video,captureCanvas,$('inputMirrored').checked);
 }
 async function detect(t,token){
   const image=await bitmap();
@@ -113,7 +127,7 @@ async function detect(t,token){
   const recordingId=recording.wantsFrame(t)?recording.id:null;
   let recordingImage=null;
   try{
-  if(recordingId)recordingImage=await createImageBitmap(image);
+  if(recordingId)recordingImage=await bitmapWithDeadline(()=>createImageBitmap(image));
   if(token!==generation){image.close();throw Error('Operation stopped.');}
   const id=++nextId;
   const response=await new Promise((resolve,reject)=>{
@@ -130,6 +144,7 @@ function accept(result,t,phase,phaseStartValue,inferenceMs=null,truth=null){
   const sample={t,phase,phaseStart:phaseStartValue,...measured,inferenceMs,frameSize:{width,height}};
   if(truth)sample.syntheticTruth=truth;
   samples.push(sample);const smoothed=filter.step(measured,t);
+  if(source==='camera'){lastTrackingUpdate=performance.now();recentUpdates.push(lastTrackingUpdate);trackingHealth();}
   $('leftValue').textContent=smoothed?fmt(smoothed[0]):'—';$('rightValue').textContent=smoothed?fmt(smoothed[1]):'—';
   $('headValue').textContent=measured.head?['yaw','pitch','roll'].map(k=>fmt(measured.head[k],1)+'°').join(' / '):'—';
   drawOverlay(sample,width,height);
@@ -201,32 +216,23 @@ $('cameraStart').onclick=async()=>{
     video.style.transform=$('inputMirrored').checked?'scaleX(-1)':'';
     await video.play();if(token!==generation)return;
     sourceInfo.settings={width:video.videoWidth,height:video.videoHeight,frameRate:stream.getVideoTracks()[0].getSettings().frameRate};
+    sourceInfo.runtime={build:'live3',browser:navigator.userAgent,frameInput:'canvas-oriented-bitmap'};
     stream.getVideoTracks()[0].onended=()=>{stop();status('Camera disconnected. Collected data can still be exported.');};
     await initWorker(token);if(token!==generation)return;
-    startTime=performance.now();phaseStart=0;cameraReady=true;refreshRecordingControls();let lastMedia=-1;
-    const schedule=()=>{
+    startTime=performance.now();phaseStart=0;cameraReady=true;refreshRecordingControls();
+    lastTrackingUpdate=0;recentUpdates=[];trackingHealth();healthTimer=setInterval(trackingHealth,500);
+    stopLiveLoop=startLiveLoop({video,onMode:mode=>{sourceInfo.runtime.frameScheduler=mode;},onError:e=>{if(token===generation){stop();status(e.message);}},onFrame:async(metadata,frameInfo)=>{
       if(token!==generation)return;
-      if(video.requestVideoFrameCallback)videoCallback=video.requestVideoFrameCallback((now,metadata)=>{videoCallback=null;tick(metadata);});
-      else raf=requestAnimationFrame(()=>tick(null));
-    };
-    const tick=async metadata=>{
-      if(token!==generation)return;
-      const mediaTime=metadata?.mediaTime??video.currentTime;
-      if(video.readyState>=2 && mediaTime!==lastMedia){
-        lastMedia=mediaTime;const t=(performance.now()-startTime)/1000,phase=$('phase').value,start=phaseStart;
-        try{
-          const data=await detect(t,token);
-          if(token!==generation){data.recordingImage?.close();return;}
-          const sample=accept(data.result,t,phase,start,data.inferenceMs);
-          sample.cameraMediaTimeSeconds=mediaTime;
-          sample.cameraPresentedFrames=metadata?.presentedFrames??null;
-          recording.addFrame(data.recordingImage,sample,data.recordingId);
-        }
-        catch(e){if(token===generation){stop();status(e.message);}return;}
-        if(t>=300){stop();status('Five-minute session limit reached. Export the collected data.');return;}
-      }
-      schedule();
-    };schedule();
+      const t=(performance.now()-startTime)/1000,phase=$('phase').value,start=phaseStart;
+      const data=await detect(t,token);
+      if(token!==generation){data.recordingImage?.close();return;}
+      const sample=accept(data.result,t,phase,start,data.inferenceMs);
+      sample.cameraMediaTimeSeconds=metadata?.mediaTime??video.currentTime;
+      sample.cameraPresentedFrames=metadata?.presentedFrames??null;
+      sample.cameraFrameScheduler=frameInfo.mode;
+      recording.addFrame(data.recordingImage,sample,data.recordingId);
+      if(t>=300){stop();status('Five-minute session limit reached. Export the collected data.');}
+    }});
   }catch(e){if(token===generation){stop();status('Cannot start: '+e.message);}}
 };
 $('phase').onchange=()=>{if(running && source==='camera'){phaseStart=(performance.now()-startTime)/1000;recording.markPhase($('phase').value,phaseStart);}};

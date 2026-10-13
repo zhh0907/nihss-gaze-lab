@@ -63,7 +63,7 @@ function initialize() {
       move($('sourceBadge'),top);top.insertBefore($('sourceBadge'),menu);
       move(document.querySelector('#live .metrics'),details);
       const phase=el('div','app-phase');move(document.querySelector('label[for="phase"]'),phase);move($('phase'),phase);details.append(phase);
-      move($('status'),status);move($('recordIndicator'),details);
+      move($('trackingHealth'),status);move($('status'),status);move($('recordIndicator'),details);
       move($('cameraStart'),cameraGroup);move($('stop'),cameraGroup);move($('recordStart'),recordGroup);move($('recordStop'),recordGroup);actions.append(cameraGroup,recordGroup,clipShortcut);
       move($('recordings'),panes.Clips);move($('assessment'),panes.Review);move(document.querySelector('.exports'),panes.Clips);
       // The remaining camera instructions, trace and evidence remain available.

@@ -37,6 +37,7 @@
   <label for="phase">Live exam phase</label>
   <select id="phase"><option value="unlabelled">Unlabelled / preparation</option><option value="center">Center / rest</option><option value="left">Look to subject-left</option><option value="right">Look to subject-right</option><option value="reflex">Clinical reflex exam (record only)</option></select>
   <p class="hint">The examiner presents adequate left/right targets and marks phases. Phone screen edges do not cover the full gaze range. Reflex examination requires qualified clinical staff.</p>
+    <p id="trackingHealth" class="hint" hidden>Waiting for eye tracking…</p>
     <p id="status" role="status" aria-live="polite">The local model loads when needed.</p>
     <div class="record-bar"><div class="buttons"><button id="recordStart" disabled>● Start recording</button><button id="recordStop" disabled>Stop recording</button></div><span id="recordIndicator" role="status">Start the camera to record movement and eye positions.</span></div>
     <p class="hint">Records raw video and an analysis video with eye measurements. Camera only, no audio. Replay and download below.</p>
@@ -73,4 +74,4 @@
 </section>
 <section class="card exports"><div><h2>Export full session</h2><p class="hint">Export measurements and decisions for the full session here. Use the clip buttons above for individual recordings and their data.</p></div><div class="buttons"><button id="exportJson" disabled>Export JSON</button><button id="exportCsv" disabled>Export CSV</button><a class="button" href="./guide.html">Methods & instructions ↗</a></div></section>
 <footer>Gaze Lab v0.2 · Planar pose correction · Independent eyes · No initial-gaze zeroing · Local processing</footer>
-</main><script type="module" src="./app.js?v=mobile2"></script><script type="module" src="./english-ui.js"></script><script type="module" src="./mobile-shell.js?v=mobile2"></script></body></html>
+</main><script type="module" src="./app.js?v=live3"></script><script type="module" src="./english-ui.js"></script><script type="module" src="./mobile-shell.js?v=live3"></script></body></html>

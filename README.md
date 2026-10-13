@@ -10,6 +10,12 @@ On phones, the app opens directly into a single-screen live workspace. Use **Too
 
 Video, independent eye measurements, head pose, phase selection and recording controls remain visible. **Setup** contains camera/import/format options; **Clips** contains replay and downloads; **Review** contains the evidence and examiner form.
 
+## Continuous camera tracking
+
+The live3 update adds a 250 ms watchdog for video-frame callbacks and a capped timer fallback. A repeating `mediaTime` no longer blocks analysis. Frames pass through an oriented canvas before worker transfer; bitmap creation has a deadline. Only one inference runs at a time. The live status shows update count and recent update rate. Results older than 1.5 seconds are cleared with a tracking-delay message.
+
+Local exports identify the build, browser and per-frame scheduling path. These are browser capture timestamps, not sensor exposure timestamps; timer sampling may repeat a source frame. Synthetic callback-stall tests passed, but physical iPhone Safari verification is still needed.
+
 ## Video formats
 
 Choose **MP4** or **WebM** in Setup before recording. Unsupported encoders are disabled based on this browser. In Clips, **Download format** selects the original, MP4, or WebM for either the raw or annotated video. Original downloads preserve the exact recorded file. Conversion runs locally, takes roughly the clip duration, re-encodes at up to 30 fps, and can change frame timing or quality. Tap Save when conversion finishes. Keep the tab visible; cancel leaves originals intact. For frame-sensitive research, use the original recording and its JSON/CSV timestamps. No audio is recorded.
