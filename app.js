@@ -1,9 +1,13 @@
+import {cameraOrientation} from './camera-orientation.js';
+import {runSelfCheck} from './self-check.js';
+import {createSelfCheckUI} from './self-check-ui.js';
+import {simplifyUI} from './simplify-ui.js';
 import {createRepairTools} from './repair-tools.js';
 import {eyeUsable,eyeQualityLabel} from './eye-quality.js';
 import {DEFAULTS,VERSION,measureFrame,DisplayFilter} from './geometry.js?v=quality5';
 import {parseIntervals,phaseAt,summarize,scoreNIHSS} from './assessment.js';
 import {demoInput} from './fixtures.js';
-import {GazeRecorder,drawEyeMarkers,extensionFor,recordingCsv,recordingMime} from './recording.js?v=quality5';
+import {GazeRecorder,drawEyeMarkers,extensionFor,recordingCsv,recordingMime} from './recording.js?v=review7';
 import {convertVideo} from './video-export.js?v=repair6';
 import {startLiveLoop} from './live-loop.js?v=live3';
 import {captureVideoFrame,bitmapWithDeadline} from './frame-capture.js?v=live3';
@@ -31,7 +35,7 @@ const recording=new GazeRecorder({
     // State callbacks occur inside the recorder's transition.
     queueMicrotask(refreshRecordingControls);
   },
-  onClip:clip=>{recordedClips.push(clip);renderRecordings();},
+  onClip:clip=>{recordedClips.push(clip);renderRecordings();enqueueSelfCheck(clip);window.dispatchEvent(new Event('clipcreated'));},
   onError:message=>{$('recordIndicator').textContent='Recording error: '+message;},
 });
 const reasonNames={'no-face':'No face detected','multiple-faces':'Multiple faces','pose-unavailable':'Head pose unavailable','head-out-of-range':'Head pose outside current limits','eye-unavailable':'Eye landmarks missing','eye-out-of-frame':'Eye outside frame','eye-too-small':'Eye too small in image','blink-or-occlusion':'Blink / occlusion','iris-outside-eye':'Iris location invalid'};
@@ -80,7 +84,7 @@ function disposeWorker(){
 function stop(){
   recording.stop('camera-stopped');cameraReady=false;
   generation++;stopLiveLoop?.();stopLiveLoop=null;clearInterval(healthTimer);healthTimer=null;disposeWorker();
-  if(source==='camera')$('trackingHealth').textContent=`Tracking stopped · ${samples.length} updates`;
+  if(source==='camera'){$('trackingHealth').textContent=`Tracking stopped · ${samples.length} updates`;video.hidden=true;$('empty').hidden=false;$('empty').textContent='Camera stopped. Open Clips to review.';$('sourceBadge').textContent='Camera stopped';overlay.getContext('2d').clearRect(0,0,overlay.width,overlay.height);}
   stream?.getTracks().forEach(t=>t.stop());stream=null;
   video.pause();if(video.srcObject)video.srcObject=null;video.controls=source==='file';
   setRunning(false);filter.reset();updateSummary();
@@ -123,7 +127,7 @@ async function initWorker(token){
 }
 async function bitmap(){
   // Canonical, unmirrored coordinates throughout; never swap anatomical eyes.
-  return captureVideoFrame(video,captureCanvas,$('inputMirrored').checked);
+  return captureVideoFrame(video,captureCanvas,source==='file'&&$('inputMirrored').checked);
 }
 async function detect(t,token){
   const image=await bitmap();
@@ -158,10 +162,10 @@ function accept(result,t,phase,phaseStartValue,inferenceMs=null,truth=null){
   status(`${source==='demo'?'Synthetic demo · ':''}${t.toFixed(2)} s · ${phaseNames[phase]} · ${measured.valid?'Both eyes valid':Array.from(new Set(reasons)).map(r=>reasonNames[r]??r).join(' / ')}${inferenceMs===null?'':` · inference ${inferenceMs.toFixed(0)} ms`}`);
   return sample;
 }
-function previewFlipped(){return source==='camera' && $('cameraFacing').value==='user' && $('previewFlip').checked;}
+function previewFlipped(){return source==='camera' && cameraOrientation($('cameraFacing').value,sourceInfo.settings,$('previewFlip').checked).previewMirrored;}
 function applyPreviewOrientation(){
   // Input correction and preview orientation are independent. Analysis stays canonical.
-  video.style.transform=$('inputMirrored').checked!==previewFlipped()?'scaleX(-1)':'';
+  video.style.transform=((source==='file'&&$('inputMirrored').checked)!==previewFlipped())?'scaleX(-1)':'';
 }
 $('previewFlip').onchange=()=>{
   applyPreviewOrientation();
@@ -221,17 +225,17 @@ function renderDecision(){
 }
 
 $('cameraStart').onclick=async()=>{
-  cleanupInput();source='camera';sourceInfo={type:'camera',startedAt:new Date().toISOString(),inputMirrored:$('inputMirrored').checked};clearMeasurements();
+  cleanupInput();source='camera';sourceInfo={type:'camera',startedAt:new Date().toISOString(),inputMirrored:false};clearMeasurements();
   $('fileControls').hidden=true;$('phase').value='unlabelled';$('sourceBadge').textContent='Live camera';setRunning(true);const token=generation;
   try{
     readConfig();if(!navigator.mediaDevices?.getUserMedia)throw Error('Camera access requires HTTPS on a phone, or localhost on this computer. Open the page in a current browser and allow camera access.');
     status('Requesting camera permission…');const acquired=await navigator.mediaDevices.getUserMedia({audio:false,video:{width:{ideal:1280},height:{ideal:720},facingMode:{ideal:$('cameraFacing').value}}});
     if(token!==generation){acquired.getTracks().forEach(t=>t.stop());return;}
-    stream=acquired;video.srcObject=stream;if(matchMedia('(max-width:760px)').matches)$('live').scrollIntoView({block:'start'});video.hidden=false;video.controls=false;$('empty').hidden=true;
+    stream=acquired;sourceInfo.settings={...stream.getVideoTracks()[0].getSettings()};sourceInfo.orientation=cameraOrientation($('cameraFacing').value,sourceInfo.settings);video.srcObject=stream;if(matchMedia('(max-width:760px)').matches)$('live').scrollIntoView({block:'start'});video.hidden=false;video.controls=false;$('empty').hidden=true;
     applyPreviewOrientation();
     await video.play();if(token!==generation)return;
-    sourceInfo.settings={width:video.videoWidth,height:video.videoHeight,frameRate:stream.getVideoTracks()[0].getSettings().frameRate};
-    sourceInfo.runtime={build:'repair6',browser:navigator.userAgent,frameInput:'canvas-oriented-bitmap'};
+    sourceInfo.settings={...sourceInfo.settings,width:video.videoWidth,height:video.videoHeight,frameRate:stream.getVideoTracks()[0].getSettings().frameRate};
+    sourceInfo.runtime={build:'review7',browser:navigator.userAgent,frameInput:'canvas-oriented-bitmap'};
     stream.getVideoTracks()[0].onended=()=>{stop();status('Camera disconnected. Collected data can still be exported.');};
     await initWorker(token);if(token!==generation)return;
     startTime=performance.now();phaseStart=0;cameraReady=true;refreshRecordingControls();
@@ -330,7 +334,7 @@ $('recordStart').onclick=()=>{
     refreshRecordingControls();
   }catch(error){$('recordIndicator').textContent='Cannot record: '+error.message;refreshRecordingControls();}
 };
-$('recordStop').onclick=()=>recording.stop('user');
+$('recordStop').onclick=()=>{stop();status('Clip finished. Image self-check runs locally; open Clips to review.');};
 function saveBlob(blob,name){
   const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
@@ -346,7 +350,7 @@ async function encodeRepairedVideo(controller,task){
 }
 function renderRecordings(){
   clearPreparedDownload();
-  for(const clip of recordedClips)clip.repairUi?.dispose();
+  for(const clip of recordedClips){clip.repairUi?.dispose();clip.checkUi?.dispose();}
   // Preserve existing object URLs, but detach old players to release decoders.
   const list=$('recordingList');list.querySelectorAll('video').forEach(v=>{v.pause();v.removeAttribute('src');v.load();});list.replaceChildren();
   $('recordingsEmpty').hidden=recordedClips.length>0;
@@ -355,10 +359,11 @@ function renderRecordings(){
     const {recording:r}=clip.data,details=document.createElement('details');details.className='recorded-clip';details.dataset.recordingId=r.id;details.open=i===recordedClips.length-1;
     const title=document.createElement('summary');title.textContent=`Clip ${i+1} · ${r.durationSeconds.toFixed(1)} s · ${clip.data.samples.length} analysis frames`;details.append(title);
     const player=document.createElement('video');player.controls=true;player.playsInline=true;player.preload='metadata';player.src=clip.analysisUrl;player.className='recording-preview';player.setAttribute('aria-label',`Clip ${i+1} Replay`);
+    const playbackBox=document.createElement('details'),playbackTitle=document.createElement('summary');playbackTitle.textContent='Replay video';playbackBox.append(playbackTitle);
     const label=document.createElement('label');label.textContent='Playback version';const select=document.createElement('select');select.setAttribute('aria-label',`Clip ${i+1} Playback version`);
     for(const [value,text] of [['analysis','Analysis video · Same-frame eye markers'],['raw','Raw camera video']])select.add(new Option(text,value));
     let repairUi;
-    const switchPlayback=()=>{player.pause();player.hidden=select.value==='repaired';repairUi?.show(select.value==='repaired');if(!player.hidden){const url=select.value==='raw'?clip.rawUrl:clip.analysisUrl;if(player.src!==url){player.src=url;player.load();}}};
+    const switchPlayback=()=>{if(select.value==='repaired')playbackBox.open=true;player.pause();player.hidden=select.value==='repaired';repairUi?.show(select.value==='repaired');if(!player.hidden){const url=select.value==='raw'?clip.rawUrl:clip.analysisUrl;if(player.src!==url){player.src=url;player.load();}}};
     select.onchange=switchPlayback;
     repairUi=createRepairTools({clip,clipNumber:i+1,player,getPlaybackVersion:()=>select.value,
       onVersionChange:(exists,activate)=>{
@@ -370,6 +375,7 @@ function renderRecordings(){
       },saveBlob,busyMessage:repairBusyMessage,encode:encodeRepairedVideo,
       prepareDownload:cleanup=>{clearPreparedDownload();preparedDownload=cleanup;}});
     clip.repairUi=repairUi;
+    const checkUi=createSelfCheckUI({clip,clipNumber:i+1,retry:enqueueSelfCheck,saveBlob,watch:index=>{playbackBox.open=true;select.value='analysis';switchPlayback();player.pause();player.currentTime=clip.data.samples[index].analysisVideoTimeSeconds;player.scrollIntoView({block:'nearest'});}});clip.checkUi=checkUi;
     const buttons=document.createElement('div');buttons.className='buttons';const base=`gaze_recording_${r.id.slice(0,8)}`;
     const addButton=(text,action)=>{const b=document.createElement('button');b.textContent=text;b.onclick=action;buttons.append(b);};
     const exportLabel=document.createElement('label');exportLabel.textContent='Download format';exportLabel.htmlFor=`format-${r.id}`;
@@ -404,8 +410,10 @@ function renderRecordings(){
     addButton('Eye data CSV',()=>saveBlob(new Blob([recordingCsv(clip.data)],{type:'text/csv;charset=utf-8'}),`${base}_eyes.csv`));
     const hint=document.createElement('p');hint.className='hint';hint.textContent=`${new Date(r.startedAt).toLocaleString('en-US')} · No audio · Eye positions are normalized. Analysis updates at detection speed; raw video preserves continuous motion.`;
     if(clip.data.errors.length){const error=document.createElement('p');error.className='warning';error.textContent='Recording encountered errors: '+clip.data.errors.join('；');details.append(error);}
-    const remove=document.createElement('button');remove.textContent='Remove clip';remove.className='remove-recording';remove.onclick=()=>{clip.repairUi?.dispose();player.pause();URL.revokeObjectURL(clip.analysisUrl);URL.revokeObjectURL(clip.rawUrl);recordedClips=recordedClips.filter(c=>c!==clip);renderRecordings();refreshRecordingControls();};
-    details.append(label,select,player,repairUi.element,hint,exportLabel,exportFormat,buttons,exportStatus,cancel,readyDownload,remove);list.append(details);
+    const remove=document.createElement('button');remove.textContent='Remove clip';remove.className='remove-recording';remove.onclick=()=>{clip.checkController?.abort();clip.checkUi?.dispose();clip.repairUi?.dispose();player.pause();URL.revokeObjectURL(clip.analysisUrl);URL.revokeObjectURL(clip.rawUrl);recordedClips=recordedClips.filter(c=>c!==clip);renderRecordings();refreshRecordingControls();};
+    const downloads=document.createElement('details'),downloadTitle=document.createElement('summary');downloadTitle.textContent='Downloads';downloads.append(downloadTitle,exportLabel,exportFormat,buttons,exportStatus,cancel,readyDownload,hint,remove);
+    const legacy=document.createElement('details'),legacyTitle=document.createElement('summary');legacyTitle.textContent='Advanced · Short-gap interpolation';legacy.append(legacyTitle,repairUi.element);
+    playbackBox.append(label,select,player);details.append(checkUi.element,playbackBox,downloads,legacy);list.append(details);
   }
   $('recordingsLimit').hidden=recordedClips.length<3;
   refreshRecordingControls();
@@ -419,8 +427,25 @@ $('exportCsv').onclick=()=>{
   download([header,...rows].map(row=>row.map(escape).join(',')).join('\r\n'),'text/csv;charset=utf-8','csv');
 };
 window.addEventListener('beforeunload',event=>{if(recording.busy||activeConversion){event.preventDefault();event.returnValue='';}});
-window.addEventListener('pagehide',()=>{activeConversion?.abort();clearPreparedDownload();stop();if(fileUrl)URL.revokeObjectURL(fileUrl);for(const clip of recordedClips){clip.repairUi?.dispose();URL.revokeObjectURL(clip.analysisUrl);URL.revokeObjectURL(clip.rawUrl);}});
+window.addEventListener('pagehide',()=>{activeConversion?.abort();clearPreparedDownload();stop();if(fileUrl)URL.revokeObjectURL(fileUrl);for(const clip of recordedClips){clip.checkController?.abort();clip.checkUi?.dispose();clip.repairUi?.dispose();URL.revokeObjectURL(clip.analysisUrl);URL.revokeObjectURL(clip.rawUrl);}});
 window.addEventListener('resize',drawTrace);
 // Read-only research snapshots also make reproducible browser QA possible.
+simplifyUI();
 window.gazeLab={runDemo,getSnapshot:()=>JSON.parse(JSON.stringify(exportObject())),getRecordings:()=>recordedClips.map(c=>structuredClone(c.data))};
 updateSummary();drawTrace();refreshRecordingControls();
+
+let checkQueue=Promise.resolve();
+function enqueueSelfCheck(clip){
+  if(['queued','running'].includes(clip.checkState)||clip.checkReport)return;
+  const controller=new AbortController();clip.checkController=controller;clip.checkState='queued';clip.checkError=null;
+  const emit=()=>clip.checkEvents?.dispatchEvent(new Event('change'));emit();
+  checkQueue=checkQueue.catch(()=>{}).then(async()=>{
+    try{
+      if(controller.signal.aborted)throw new DOMException('Self-check stopped.','AbortError');
+      clip.checkState='running';emit();
+      clip.checkReport=await runSelfCheck(clip,{signal:controller.signal,onProgress:(n,total)=>{clip.checkProgress=n+' / '+total;emit();}});
+      clip.checkState='complete';
+    }catch(e){clip.checkState='stopped';clip.checkError=e.name==='AbortError'?'Self-check stopped. Tap Check images to retry.':e.message;}
+    finally{clip.checkController=null;emit();}
+  });
+}

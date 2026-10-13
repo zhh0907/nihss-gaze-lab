@@ -22,7 +22,7 @@ The quality5 update removes rejected iris dots from both preview and annotated r
 
 ## Preview orientation
 
-The front-camera preview is flipped horizontally by default. **Tools → Setup → Flip front-camera preview** changes the display while tracking. Markers follow the image with upright L/R labels. Analysis coordinates, saved clips, imported videos and rear-camera orientation are unaffected. The separate input-unmirror setting corrects source pixels before analysis.
+The front-camera preview is flipped horizontally by default. **Tools → Setup → Recording & display settings → Flip front-camera preview** changes the display while tracking. Markers follow the image with upright L/R labels. Analysis coordinates, saved clips, imported videos and rear-camera orientation are unaffected. The separate input-unmirror setting corrects imported file pixels before analysis.
 
 ## Continuous camera tracking
 
@@ -103,3 +103,9 @@ camera-calibration tools. Those tools are not needed to open or run the website.
 - [Configure the publishing source](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site)
 - [HTTPS](https://docs.github.com/en/pages/getting-started-with-github-pages/securing-your-github-pages-site-with-https)
 - [Upload limits](https://docs.github.com/en/repositories/working-with-files/managing-files/adding-a-file-to-a-repository)
+
+## Image self-check (review7)
+
+New clips automatically recheck saved, unmarked copies of the exact detector inputs. Stateless and mirrored-image detections plus an appearance heuristic flag possible errors; alternatives are proposals for examiner review. Originals and NIHSS evidence are never overwritten. Paired stills, independent eye choices and JSON/CSV review exports are available in Clips. Short-gap interpolation remains under Advanced.
+
+Storage is bounded to 48 MiB of clean frames per clip; checked/total coverage is explicit. This is an experimental review aid, not evidence of improved clinical accuracy. Older standalone videos do not contain the required same-frame archive. See guide.html for methods and limitations. Front preview is mirrored; rear is not, using actual track facing mode when reported. Input unmirroring is file-only.

@@ -36,6 +36,7 @@ function initialize() {
   function open(name='Setup'){select(name);if(!drawer.open)drawer.showModal();menu.setAttribute('aria-expanded','true');close.focus();}
   function dismiss(){drawer.close();menu.setAttribute('aria-expanded','false');menu.focus({preventScroll:true});}
   menu.onclick=()=>open();close.onclick=dismiss;
+  window.addEventListener('clipcreated',()=>{if(active&&!simulator)open('Clips');});
   drawer.addEventListener('click',event=>{if(event.target===drawer){const r=drawer.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right)dismiss();}});
   drawer.addEventListener('close',()=>menu.setAttribute('aria-expanded','false'));
   function move(node,host){if(!node)return;if(!homes.has(node)){const marker=document.createComment('desktop position');node.before(marker);homes.set(node,marker);}host.append(node);}
@@ -91,7 +92,7 @@ function initialize() {
       const host=camera?panes.Scene:visuals;if($('view').parentElement!==host)host.append($('view'));
       cameraGroup.hidden=!camera;blank.hidden=!!$('cameraVideo').srcObject;
       $('cameraStatus').hidden=!camera;
-      text(extra,camera?'Mirror preview · Yellow marker = fingertip':source==='data'?'Human gaze replay · Change recording in Tools':'Virtual target · Change motion in Tools');
+      text(extra,camera?(($('cameraPreview').dataset.facing==='environment'?'Rear camera · Natural preview':'Front camera · Mirror preview')+' · Yellow = fingertip'):source==='data'?'Human gaze replay · Change recording in Tools':'Virtual target · Change motion in Tools');
     }else{
       const recording=!$('recordStop').disabled;
       $('recordStart').classList.toggle('app-superseded',recording);$('recordStop').classList.toggle('app-superseded',!recording);

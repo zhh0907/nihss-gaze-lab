@@ -1,3 +1,4 @@
+import {ReviewArchive} from './review-archive.js';
 import {eyeUsable,eyeQualityLabel} from './eye-quality.js';
 // All media stays in memory until the user downloads it. Detection frames are
 // copied BEFORE transfer to the worker; overlays never use a newer camera frame.
@@ -70,7 +71,7 @@ export class GazeRecorder {
     const width=Math.round(video.videoWidth*scale/2)*2,frameHeight=Math.round(video.videoHeight*scale/2)*2;
     canvas.width=width;canvas.height=frameHeight+144;
     const item={id:crypto.randomUUID(),canvas,frameHeight,width,metadata:structuredClone(metadata),
-      startedAt:new Date().toISOString(),phase,frames:[],events:[],errors:[],bytes:0,stopping:false};
+      startedAt:new Date().toISOString(),phase,frames:[],events:[],errors:[],bytes:0,stopping:false,reviewArchive:new ReviewArchive()};
     this.current=item;
     const onBytes=n=>{item.bytes+=n;if(item.bytes>256*1024*1024)this.stop('size-limit');};
     const onError=message=>{item.errors.push(message);this.onError(message);this.stop('encoder-error');};
@@ -116,6 +117,7 @@ export class GazeRecorder {
         analysisVideoTimeSeconds:(renderedAt-item.startedPerf)/1000,
         rawVideoTimeSeconds:sample.t-item.startSessionTime-(item.rawStartedPerf-item.startedPerf)/1000};
       if(frame.rawVideoTimeSeconds<0)return;
+      item.reviewArchive.add(image,item.frames.length);
       item.ctx.drawImage(image,0,144,item.width,item.frameHeight);
       item.ctx.save();item.ctx.translate(0,144);
       drawEyeMarkers(item.ctx,sample,item.width,item.frameHeight);item.ctx.restore();
@@ -163,10 +165,11 @@ export class GazeRecorder {
       timing:'Capture and canvas-presentation times share a monotonic browser clock. Video offsets are estimates, not hardware/encoder frame timestamps. Analysis frames are held between detections; raw video preserves camera motion.'},
       samples:item.frames,events:item.events,errors:item.errors};
     for(const r of [item.analysis,item.raw])if(r.recorder.state!=='inactive')r.recorder.stop();
-    this.finishing=Promise.all([item.analysis.done,item.raw.done]).then(([analysis,raw])=>{
+    this.finishing=Promise.all([item.analysis.done,item.raw.done,item.reviewArchive.finish()]).then(([analysis,raw,reviewFrames])=>{
       data.recording.analysisMime=analysis.blob.type;data.recording.rawMime=raw.blob.type;
       if(!analysis.blob.size||!raw.blob.size)data.errors.push('Empty media: recording may have ended before a video frame was encoded.');
-      const clip={data,analysis:analysis.blob,raw:raw.blob};
+      data.recording.selfCheckFrameCoverage={saved:reviewFrames.length,total:item.frames.length,skipped:item.reviewArchive.skipped};
+      const clip={data,analysis:analysis.blob,raw:raw.blob,reviewFrames};
       this.onClip(clip);return clip;
     }).catch(error=>{this.onError(error.message);return null;}).finally(()=>{
       for(const s of [item.analysisStream,item.rawStream])s.getTracks().forEach(t=>t.stop());
