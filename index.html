@@ -8,10 +8,12 @@
 <aside class="card" id="settings">
   <h2>01 / Input & setup</h2>
   <label for="cameraFacing">Camera (stop before switching)</label><select id="cameraFacing"><option value="user">Front camera / selfie</option><option value="environment">Rear camera</option></select><div class="buttons"><button id="cameraStart" class="primary">Start camera</button><button id="stop" disabled>Stop</button></div>
+  <label class="check"><input id="previewFlip" type="checkbox" checked>Flip front-camera preview</label>
+  <p class="hint">Display only. Eye markers follow the picture; measurements and saved videos keep their original orientation.</p>
   <label for="recordFormat">Recording format</label><select id="recordFormat"><option value="mp4">MP4</option><option value="webm">WebM</option></select><p id="formatHint" class="hint">Checking browser video formats…</p>
   <label for="videoFile">Or import a phone video</label><input id="videoFile" type="file" accept="video/*">
   <label class="check"><input id="inputMirrored" type="checkbox">Input is already mirrored; unmirror before analysis</label>
-  <p class="hint">Unmirrored display and analysis. Left/right refer to the subject. Eye position is normalized by half the eye width, not degrees.</p>
+  <p class="hint">Analysis uses unmirrored coordinates. Left/right refer to the subject. Eye position is normalized by half the eye width, not degrees.</p>
   <div id="fileControls" hidden>
     <label for="intervals">Video phases: start seconds / end seconds / phase</label>
     <textarea id="intervals" rows="5" spellcheck="false" placeholder="Use actual video times, for example:&#10;0 2 center&#10;2 5 left&#10;5 7 center&#10;7 10 right"></textarea>
@@ -74,4 +76,4 @@
 </section>
 <section class="card exports"><div><h2>Export full session</h2><p class="hint">Export measurements and decisions for the full session here. Use the clip buttons above for individual recordings and their data.</p></div><div class="buttons"><button id="exportJson" disabled>Export JSON</button><button id="exportCsv" disabled>Export CSV</button><a class="button" href="./guide.html">Methods & instructions ↗</a></div></section>
 <footer>Gaze Lab v0.2 · Planar pose correction · Independent eyes · No initial-gaze zeroing · Local processing</footer>
-</main><script type="module" src="./app.js?v=live3"></script><script type="module" src="./english-ui.js"></script><script type="module" src="./mobile-shell.js?v=live3"></script></body></html>
+</main><script type="module" src="./app.js?v=preview4"></script><script type="module" src="./english-ui.js"></script><script type="module" src="./mobile-shell.js?v=live3"></script></body></html>

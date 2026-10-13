@@ -10,6 +10,10 @@ On phones, the app opens directly into a single-screen live workspace. Use **Too
 
 Video, independent eye measurements, head pose, phase selection and recording controls remain visible. **Setup** contains camera/import/format options; **Clips** contains replay and downloads; **Review** contains the evidence and examiner form.
 
+## Preview orientation
+
+The front-camera preview is flipped horizontally by default. **Tools → Setup → Flip front-camera preview** changes the display while tracking. Markers follow the image with upright L/R labels. Analysis coordinates, saved clips, imported videos and rear-camera orientation are unaffected. The separate input-unmirror setting corrects source pixels before analysis.
+
 ## Continuous camera tracking
 
 The live3 update adds a 250 ms watchdog for video-frame callbacks and a capped timer fallback. A repeating `mediaTime` no longer blocks analysis. Frames pass through an oriented canvas before worker transfer; bitmap creation has a deadline. Only one inference runs at a time. The live status shows update count and recent update rate. Results older than 1.5 seconds are cleared with a tracking-delay message.

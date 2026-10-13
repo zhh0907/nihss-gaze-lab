@@ -1,7 +1,7 @@
 import {DEFAULTS,VERSION,measureFrame,DisplayFilter} from './geometry.js';
 import {parseIntervals,phaseAt,summarize,scoreNIHSS} from './assessment.js';
 import {demoInput} from './fixtures.js';
-import {GazeRecorder,drawEyeMarkers,extensionFor,recordingCsv,recordingMime} from './recording.js?v=mobile2';
+import {GazeRecorder,drawEyeMarkers,extensionFor,recordingCsv,recordingMime} from './recording.js?v=preview4';
 import {convertVideo} from './video-export.js?v=mobile2';
 import {startLiveLoop} from './live-loop.js?v=live3';
 import {captureVideoFrame,bitmapWithDeadline} from './frame-capture.js?v=live3';
@@ -153,10 +153,20 @@ function accept(result,t,phase,phaseStartValue,inferenceMs=null,truth=null){
   status(`${source==='demo'?'Synthetic demo · ':''}${t.toFixed(2)} s · ${phaseNames[phase]} · ${measured.valid?'Both eyes valid':Array.from(new Set(reasons)).map(r=>reasonNames[r]??r).join(' / ')}${inferenceMs===null?'':` · inference ${inferenceMs.toFixed(0)} ms`}`);
   return sample;
 }
+function previewFlipped(){return source==='camera' && $('cameraFacing').value==='user' && $('previewFlip').checked;}
+function applyPreviewOrientation(){
+  // Input correction and preview orientation are independent. Analysis stays canonical.
+  video.style.transform=$('inputMirrored').checked!==previewFlipped()?'scaleX(-1)':'';
+}
+$('previewFlip').onchange=()=>{
+  applyPreviewOrientation();
+  const sample=samples.at(-1);
+  if(source==='camera' && sample && (!running || performance.now()-lastTrackingUpdate<=1500))drawOverlay(sample,sample.frameSize.width,sample.frameSize.height);
+};
 function drawOverlay(sample,width,height){
   overlay.width=width;overlay.height=height;const ctx=overlay.getContext('2d');
   if(source==='demo'){ctx.fillStyle='#091520';ctx.fillRect(0,0,width,height);ctx.fillStyle='#94b3c6';ctx.font='22px Segoe UI';ctx.fillText('SYNTHETIC GEOMETRY · detector bypassed',30,42);}
-  drawEyeMarkers(ctx,sample,width,height);
+  drawEyeMarkers(ctx,sample,width,height,{flipX:previewFlipped()});
 }
 function drawTrace(){
   const canvas=$('trace'),width=canvas.clientWidth||800,height=190,dpr=devicePixelRatio||1;
@@ -213,10 +223,10 @@ $('cameraStart').onclick=async()=>{
     status('Requesting camera permission…');const acquired=await navigator.mediaDevices.getUserMedia({audio:false,video:{width:{ideal:1280},height:{ideal:720},facingMode:{ideal:$('cameraFacing').value}}});
     if(token!==generation){acquired.getTracks().forEach(t=>t.stop());return;}
     stream=acquired;video.srcObject=stream;if(matchMedia('(max-width:760px)').matches)$('live').scrollIntoView({block:'start'});video.hidden=false;video.controls=false;$('empty').hidden=true;
-    video.style.transform=$('inputMirrored').checked?'scaleX(-1)':'';
+    applyPreviewOrientation();
     await video.play();if(token!==generation)return;
     sourceInfo.settings={width:video.videoWidth,height:video.videoHeight,frameRate:stream.getVideoTracks()[0].getSettings().frameRate};
-    sourceInfo.runtime={build:'live3',browser:navigator.userAgent,frameInput:'canvas-oriented-bitmap'};
+    sourceInfo.runtime={build:'preview4',browser:navigator.userAgent,frameInput:'canvas-oriented-bitmap'};
     stream.getVideoTracks()[0].onended=()=>{stop();status('Camera disconnected. Collected data can still be exported.');};
     await initWorker(token);if(token!==generation)return;
     startTime=performance.now();phaseStart=0;cameraReady=true;refreshRecordingControls();
@@ -251,7 +261,7 @@ $('videoFile').onchange=async()=>{
     }
     if(!Number.isFinite(video.duration)||video.duration<=0||video.duration>300)throw Error('Select a video with a valid duration of up to 5 minutes.');
     sourceInfo={...sourceInfo,duration:video.duration,width:video.videoWidth,height:video.videoHeight};
-    video.hidden=false;video.controls=true;video.style.transform=$('inputMirrored').checked?'scaleX(-1)':'';$('empty').hidden=true;
+    video.hidden=false;video.controls=true;applyPreviewOrientation();$('empty').hidden=true;
     status(`Loaded ${video.duration.toFixed(2)} s video. Preview, label phases, then analyze.`);setRunning(false);
   }catch(e){if(token===generation){source='none';stop();status(e.message);}}
 };
@@ -290,7 +300,7 @@ for(const id of ['reviewer','examAdequate','finding','overcome','reflexAssessed'
 for(const id of ['fov','inputMirrored','intervals']) $(id).addEventListener('change',()=>{
   if(source==='file'){
     clearMeasurements();overlay.getContext('2d').clearRect(0,0,overlay.width,overlay.height);
-    video.style.transform=$('inputMirrored').checked?'scaleX(-1)':'';
+    applyPreviewOrientation();
     status('Input parameters or phases changed. Analyze the video again.');
   }
 });

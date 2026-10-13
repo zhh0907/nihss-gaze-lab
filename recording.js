@@ -10,17 +10,17 @@ export const extensionFor=mime=>mime.startsWith('video/mp4')?'mp4':'webm';
 const fmt=(n,d=3)=>Number.isFinite(n)?n.toFixed(d):'—';
 const phases={center:'Center / rest',left:'Subject looks left',right:'Subject looks right',reflex:'Clinical reflex exam',unlabelled:'Unlabelled / preparation'};
 
-export function drawEyeMarkers(ctx,sample,width,height) {
-  const scale=Math.max(1,width/900);
+export function drawEyeMarkers(ctx,sample,width,height,{flipX=false}={}) {
+  const scale=Math.max(1,width/900),x=p=>(flipX?1-p.x:p.x)*width;
   for(const [side,color] of [['left','#61dcc3'],['right','#80baff']]){
     const eye=sample?.[side];if(!eye?.points)continue;
     const pts=eye.points,good=p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y);
     if(!good(pts.a)||!good(pts.b))continue;
     ctx.strokeStyle=eye.valid?color:'#f2bb70';ctx.fillStyle=ctx.strokeStyle;ctx.lineWidth=2*scale;
-    ctx.beginPath();ctx.moveTo(pts.a.x*width,pts.a.y*height);ctx.lineTo(pts.b.x*width,pts.b.y*height);ctx.stroke();
-    for(const key of ['a','b','iris','top','bottom']){const p=pts[key];if(!good(p))continue;ctx.beginPath();ctx.arc(p.x*width,p.y*height,key==='iris'?4*scale:2*scale,0,Math.PI*2);ctx.fill();}
+    ctx.beginPath();ctx.moveTo(x(pts.a),pts.a.y*height);ctx.lineTo(x(pts.b),pts.b.y*height);ctx.stroke();
+    for(const key of ['a','b','iris','top','bottom']){const p=pts[key];if(!good(p))continue;ctx.beginPath();ctx.arc(x(p),p.y*height,key==='iris'?4*scale:2*scale,0,Math.PI*2);ctx.fill();}
     if(good(pts.iris)&&good(pts.top)){
-      ctx.font=`${13*scale}px Segoe UI`;ctx.fillText(side==='left'?'L':'R',pts.iris.x*width,pts.top.y*height-10*scale);
+      ctx.font=`${13*scale}px Segoe UI`;ctx.fillText(side==='left'?'L':'R',x(pts.iris),pts.top.y*height-10*scale);
     }
   }
 }
