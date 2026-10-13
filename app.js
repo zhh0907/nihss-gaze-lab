@@ -1,9 +1,10 @@
+import {createRepairTools} from './repair-tools.js';
 import {eyeUsable,eyeQualityLabel} from './eye-quality.js';
 import {DEFAULTS,VERSION,measureFrame,DisplayFilter} from './geometry.js?v=quality5';
 import {parseIntervals,phaseAt,summarize,scoreNIHSS} from './assessment.js';
 import {demoInput} from './fixtures.js';
 import {GazeRecorder,drawEyeMarkers,extensionFor,recordingCsv,recordingMime} from './recording.js?v=quality5';
-import {convertVideo} from './video-export.js?v=mobile2';
+import {convertVideo} from './video-export.js?v=repair6';
 import {startLiveLoop} from './live-loop.js?v=live3';
 import {captureVideoFrame,bitmapWithDeadline} from './frame-capture.js?v=live3';
 
@@ -230,7 +231,7 @@ $('cameraStart').onclick=async()=>{
     applyPreviewOrientation();
     await video.play();if(token!==generation)return;
     sourceInfo.settings={width:video.videoWidth,height:video.videoHeight,frameRate:stream.getVideoTracks()[0].getSettings().frameRate};
-    sourceInfo.runtime={build:'quality5',browser:navigator.userAgent,frameInput:'canvas-oriented-bitmap'};
+    sourceInfo.runtime={build:'repair6',browser:navigator.userAgent,frameInput:'canvas-oriented-bitmap'};
     stream.getVideoTracks()[0].onended=()=>{stop();status('Camera disconnected. Collected data can still be exported.');};
     await initWorker(token);if(token!==generation)return;
     startTime=performance.now();phaseStart=0;cameraReady=true;refreshRecordingControls();
@@ -316,7 +317,7 @@ function exportObject(){return {
 };}
 
 function refreshRecordingControls(){
-  $('recordStart').disabled=!recording.supported||!cameraReady||source!=='camera'||!running||recording.busy||recordedClips.length>=3;
+  $('recordStart').disabled=!recording.supported||!cameraReady||source!=='camera'||!running||recording.busy||recordedClips.length>=3||!!activeConversion;
   $('recordStop').disabled=!recording.active;
   $('recordFormat').disabled=recording.busy;
   if(!recording.supported)$('recordIndicator').textContent='Recording is unavailable in this browser. Try a browser with MediaRecorder and canvas capture support.';
@@ -333,8 +334,19 @@ $('recordStop').onclick=()=>recording.stop('user');
 function saveBlob(blob,name){
   const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
+function repairBusyMessage(){return recording.busy?'Stop recording before repairing or exporting a clip.':activeConversion?'Finish or cancel the current video export first.':null;}
+async function encodeRepairedVideo(controller,task){
+  const message=repairBusyMessage();if(message)throw Error(message);
+  clearPreparedDownload();activeConversion=controller;
+  document.querySelectorAll('.remove-recording,.repair-run,.repair-reset').forEach(b=>b.disabled=true);refreshRecordingControls();
+  try{return await task();}finally{
+    if(activeConversion===controller)activeConversion=null;
+    document.querySelectorAll('.remove-recording,.repair-run,.repair-reset').forEach(b=>b.disabled=false);refreshRecordingControls();
+  }
+}
 function renderRecordings(){
   clearPreparedDownload();
+  for(const clip of recordedClips)clip.repairUi?.dispose();
   // Preserve existing object URLs, but detach old players to release decoders.
   const list=$('recordingList');list.querySelectorAll('video').forEach(v=>{v.pause();v.removeAttribute('src');v.load();});list.replaceChildren();
   $('recordingsEmpty').hidden=recordedClips.length>0;
@@ -345,7 +357,19 @@ function renderRecordings(){
     const player=document.createElement('video');player.controls=true;player.playsInline=true;player.preload='metadata';player.src=clip.analysisUrl;player.className='recording-preview';player.setAttribute('aria-label',`Clip ${i+1} Replay`);
     const label=document.createElement('label');label.textContent='Playback version';const select=document.createElement('select');select.setAttribute('aria-label',`Clip ${i+1} Playback version`);
     for(const [value,text] of [['analysis','Analysis video · Same-frame eye markers'],['raw','Raw camera video']])select.add(new Option(text,value));
-    select.onchange=()=>{player.pause();player.src=select.value==='raw'?clip.rawUrl:clip.analysisUrl;player.load();};
+    let repairUi;
+    const switchPlayback=()=>{player.pause();player.hidden=select.value==='repaired';repairUi?.show(select.value==='repaired');if(!player.hidden){const url=select.value==='raw'?clip.rawUrl:clip.analysisUrl;if(player.src!==url){player.src=url;player.load();}}};
+    select.onchange=switchPlayback;
+    repairUi=createRepairTools({clip,clipNumber:i+1,player,getPlaybackVersion:()=>select.value,
+      onVersionChange:(exists,activate)=>{
+        const option=Array.from(select.options).find(o=>o.value==='repaired');
+        if(exists&&!option)select.add(new Option('Repaired preview · Estimates in purple','repaired'));
+        if(!exists){option?.remove();select.value='analysis';}
+        else if(activate)select.value='repaired';
+        switchPlayback();
+      },saveBlob,busyMessage:repairBusyMessage,encode:encodeRepairedVideo,
+      prepareDownload:cleanup=>{clearPreparedDownload();preparedDownload=cleanup;}});
+    clip.repairUi=repairUi;
     const buttons=document.createElement('div');buttons.className='buttons';const base=`gaze_recording_${r.id.slice(0,8)}`;
     const addButton=(text,action)=>{const b=document.createElement('button');b.textContent=text;b.onclick=action;buttons.append(b);};
     const exportLabel=document.createElement('label');exportLabel.textContent='Download format';exportLabel.htmlFor=`format-${r.id}`;
@@ -362,8 +386,8 @@ function renderRecordings(){
       if(extensionFor(blob.type)===format){saveBlob(blob,`${base}_${version}.${format}`);return;}
       if(recording.busy){exportStatus.textContent='Stop recording before converting. The original can be downloaded immediately.';return;}
       clearPreparedDownload();
-      const controller=new AbortController();activeConversion=controller;cancel.hidden=false;cancel.onclick=()=>controller.abort();exportFormat.disabled=true;
-      buttons.querySelectorAll('button').forEach(button=>button.disabled=true);document.querySelectorAll('.remove-recording').forEach(button=>button.disabled=true);
+      const controller=new AbortController();activeConversion=controller;refreshRecordingControls();cancel.hidden=false;cancel.onclick=()=>controller.abort();exportFormat.disabled=true;
+      buttons.querySelectorAll('button').forEach(button=>button.disabled=true);document.querySelectorAll('.remove-recording,.repair-run,.repair-reset').forEach(button=>button.disabled=true);
       try{
         const converted=await convertVideo(blob,format,{signal:controller.signal,onProgress:(t,duration)=>{exportStatus.textContent=`Converting to ${format.toUpperCase()} · ${t.toFixed(1)}${Number.isFinite(duration)?' / '+duration.toFixed(1):''} s. Keep this tab visible.`;}});
         // A fresh tap keeps the final download inside a user gesture on phones.
@@ -372,7 +396,7 @@ function renderRecordings(){
         preparedDownload=()=>{readyDownload.hidden=true;readyDownload.onclick=null;};
         exportStatus.textContent=`${format.toUpperCase()} ready. Tap Save below to download. The original recording and eye data are unchanged.`;
       }catch(error){exportStatus.textContent=error.message;}
-      finally{activeConversion=null;cancel.hidden=true;exportFormat.disabled=false;buttons.querySelectorAll('button').forEach(button=>button.disabled=false);document.querySelectorAll('.remove-recording').forEach(button=>button.disabled=false);}
+      finally{activeConversion=null;cancel.hidden=true;exportFormat.disabled=false;buttons.querySelectorAll('button').forEach(button=>button.disabled=false);document.querySelectorAll('.remove-recording,.repair-run,.repair-reset').forEach(button=>button.disabled=false);refreshRecordingControls();}
     };
     addButton('Download analysis video',()=>exportClip('analysis'));
     addButton('Download raw video',()=>exportClip('raw'));
@@ -380,8 +404,8 @@ function renderRecordings(){
     addButton('Eye data CSV',()=>saveBlob(new Blob([recordingCsv(clip.data)],{type:'text/csv;charset=utf-8'}),`${base}_eyes.csv`));
     const hint=document.createElement('p');hint.className='hint';hint.textContent=`${new Date(r.startedAt).toLocaleString('en-US')} · No audio · Eye positions are normalized. Analysis updates at detection speed; raw video preserves continuous motion.`;
     if(clip.data.errors.length){const error=document.createElement('p');error.className='warning';error.textContent='Recording encountered errors: '+clip.data.errors.join('；');details.append(error);}
-    const remove=document.createElement('button');remove.textContent='Remove clip';remove.className='remove-recording';remove.onclick=()=>{player.pause();URL.revokeObjectURL(clip.analysisUrl);URL.revokeObjectURL(clip.rawUrl);recordedClips=recordedClips.filter(c=>c!==clip);renderRecordings();refreshRecordingControls();};
-    details.append(label,select,player,hint,exportLabel,exportFormat,buttons,exportStatus,cancel,readyDownload,remove);list.append(details);
+    const remove=document.createElement('button');remove.textContent='Remove clip';remove.className='remove-recording';remove.onclick=()=>{clip.repairUi?.dispose();player.pause();URL.revokeObjectURL(clip.analysisUrl);URL.revokeObjectURL(clip.rawUrl);recordedClips=recordedClips.filter(c=>c!==clip);renderRecordings();refreshRecordingControls();};
+    details.append(label,select,player,repairUi.element,hint,exportLabel,exportFormat,buttons,exportStatus,cancel,readyDownload,remove);list.append(details);
   }
   $('recordingsLimit').hidden=recordedClips.length<3;
   refreshRecordingControls();
@@ -394,8 +418,8 @@ $('exportCsv').onclick=()=>{
   const rows=samples.map(s=>[s.t,s.phase,s.phaseStart,s.valid,s.left?.valid,s.right?.valid,s.left?.raw,s.left?.corrected,s.right?.raw,s.right?.corrected,s.head?.yaw,s.head?.pitch,s.head?.roll,[...s.reasons,...(s.left?.reasons??[]).map(r=>'left:'+r),...(s.right?.reasons??[]).map(r=>'right:'+r)].join('|'),s.inferenceMs]);
   download([header,...rows].map(row=>row.map(escape).join(',')).join('\r\n'),'text/csv;charset=utf-8','csv');
 };
-window.addEventListener('beforeunload',event=>{if(recording.busy){event.preventDefault();event.returnValue='';}});
-window.addEventListener('pagehide',()=>{activeConversion?.abort();clearPreparedDownload();stop();if(fileUrl)URL.revokeObjectURL(fileUrl);for(const clip of recordedClips){URL.revokeObjectURL(clip.analysisUrl);URL.revokeObjectURL(clip.rawUrl);}});
+window.addEventListener('beforeunload',event=>{if(recording.busy||activeConversion){event.preventDefault();event.returnValue='';}});
+window.addEventListener('pagehide',()=>{activeConversion?.abort();clearPreparedDownload();stop();if(fileUrl)URL.revokeObjectURL(fileUrl);for(const clip of recordedClips){clip.repairUi?.dispose();URL.revokeObjectURL(clip.analysisUrl);URL.revokeObjectURL(clip.rawUrl);}});
 window.addEventListener('resize',drawTrace);
 // Read-only research snapshots also make reproducible browser QA possible.
 window.gazeLab={runDemo,getSnapshot:()=>JSON.parse(JSON.stringify(exportObject())),getRecordings:()=>recordedClips.map(c=>structuredClone(c.data))};

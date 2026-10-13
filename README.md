@@ -10,6 +10,12 @@ On phones, the app opens directly into a single-screen live workspace. Use **Too
 
 Video, independent eye measurements, head pose, phase selection and recording controls remain visible. **Setup** contains camera/import/format options; **Clips** contains replay and downloads; **Review** contains the evidence and examiner form.
 
+## Offline clip repair
+
+In Clips, **Repair short gaps** generates a separate derived review without an LLM or network request. Original recordings, samples and clinical evidence remain unchanged. Purple rings / ~ values are estimates. **Repair options** selects an eye, a 100 ms (default) or 200 ms anchor span, and an optional manually excluded interval. Both observed anchors and their neighboring samples must pass stable-eye/head/landmark checks. No extrapolation, cross-eye copying, chaining through estimated anchors, phase crossing or long-gap filling occurs. Endpoints cannot exclude hidden rapid or extreme eye movements; thresholds are experimental.
+
+The repaired preview uses clean raw video and estimated raw-video timestamps, with a 250 ms stale-sample limit. JSON bundles untouched original data with provenance, anchor indices, settings and skipped-gap reasons. CSV labels each eye sample observed/estimated/missing. **Prepare repaired video** locally re-encodes MP4/WebM with labeled estimates; cancel, hidden-tab failure and the 256 MiB encoder limit preserve originals. Processing takes roughly the clip duration. Save requires a fresh tap on mobile. **Reset to original** discards the repair. No image re-detection or generated camera frames are performed.
+
 ## Unavailable eye positions
 
 The quality5 update removes rejected iris dots from both preview and annotated recordings. A dashed eye guide labelled L ? / R ? and a per-eye reason replace misleading positions. Each valid eye keeps its own live value and trace; the other eye's loss does not reset it. Missing values are never zero-filled, held as valid, or interpolated across gaps. Bilateral examination coverage is still required. JSON includes which eyelid/blink check failed. Detector thresholds and NIHSS mapping are unchanged; this fixes presentation, not extreme-gaze detection accuracy.
