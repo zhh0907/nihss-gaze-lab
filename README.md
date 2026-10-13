@@ -10,11 +10,15 @@ On phones, the app opens directly into a single-screen live workspace. Use **Too
 
 Video, independent eye measurements, head pose, phase selection and recording controls remain visible. **Setup** contains camera/import/format options; **Clips** contains replay and downloads; **Review** contains the evidence and examiner form.
 
-## Offline clip repair
+## Segment review (segment8)
 
-In Clips, **Repair short gaps** generates a separate derived review without an LLM or network request. Original recordings, samples and clinical evidence remain unchanged. Purple rings / ~ values are estimates. **Repair options** selects an eye, a 100 ms (default) or 200 ms anchor span, and an optional manually excluded interval. Both observed anchors and their neighboring samples must pass stable-eye/head/landmark checks. No extrapolation, cross-eye copying, chaining through estimated anchors, phase crossing or long-gap filling occurs. Endpoints cannot exclude hidden rapid or extreme eye movements; thresholds are experimental.
+After recording, the app fits image-supported iris candidates over the whole sequence with forward/backward dynamic programming in head-relative coordinates. Only suspicious single-eye segments are shown. A paired animated preview uses the same saved detector input for original and proposed tracks. The examiner makes one reversible decision per segment. Unaffected eyes are not shown in the review cards.
 
-The repaired preview uses clean raw video and estimated raw-video timestamps, with a 250 ms stale-sample limit. JSON bundles untouched original data with provenance, anchor indices, settings and skipped-gap reasons. CSV labels each eye sample observed/estimated/missing. **Prepare repaired video** locally re-encodes MP4/WebM with labeled estimates; cancel, hidden-tab failure and the 256 MiB encoder limit preserve originals. Processing takes roughly the clip duration. Save requires a fresh tap on mobile. **Reset to original** discards the repair. No image re-detection or generated camera frames are performed.
+Blinks require a high blink score, a narrow opening, and reopening within 650 ms; narrow extreme gaze or sustained closure alone is retained. Blink samples are excluded from review/estimation. The original recording is preserved. Short stable gaps may be estimated only between observed same-eye anchors (at most 250 ms), with stable neighbours and no phase, head, blink or archive break. Partly hidden iris centres also require current image support and reliable same-eye anchors on both sides, at most 1.6 seconds apart; candidates outside the observed position envelope plus a small experimental margin are rejected. No normal excursion or bilateral symmetry is assumed. Long or ambiguous invisible motion remains unresolved. These are experimental thresholds, not validated clinical accuracy.
+
+Full video comparison redraws original or examiner-selected tracks over the complete raw clip, at the same timeline. Accepted estimates are purple; unresolved samples are unmeasured. MP4/WebM exports snapshot the choices and render locally. The exact original analysis/raw files remain downloadable. Full-video alignment uses approximate raw timestamps; segment crops use exact archived images. NIHSS scores and original data are unchanged.
+
+Review JSON preserves originals and per-segment/per-eye provenance; CSV includes original, proposed and selected values. Only saved analysis frames are checked (48 MiB archive per clip). Standalone older videos cannot use this workflow. This replaces the previous frame-by-frame self-check and manual short-gap UI. No LLM or image upload is used.
 
 ## Unavailable eye positions
 
@@ -103,9 +107,3 @@ camera-calibration tools. Those tools are not needed to open or run the website.
 - [Configure the publishing source](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site)
 - [HTTPS](https://docs.github.com/en/pages/getting-started-with-github-pages/securing-your-github-pages-site-with-https)
 - [Upload limits](https://docs.github.com/en/repositories/working-with-files/managing-files/adding-a-file-to-a-repository)
-
-## Image self-check (review7)
-
-New clips automatically recheck saved, unmarked copies of the exact detector inputs. Stateless and mirrored-image detections plus an appearance heuristic flag possible errors; alternatives are proposals for examiner review. Originals and NIHSS evidence are never overwritten. Paired stills, independent eye choices and JSON/CSV review exports are available in Clips. Short-gap interpolation remains under Advanced.
-
-Storage is bounded to 48 MiB of clean frames per clip; checked/total coverage is explicit. This is an experimental review aid, not evidence of improved clinical accuracy. Older standalone videos do not contain the required same-frame archive. See guide.html for methods and limitations. Front preview is mirrored; rear is not, using actual track facing mode when reported. Input unmirroring is file-only.

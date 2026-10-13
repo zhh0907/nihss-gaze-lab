@@ -1,13 +1,12 @@
 import {cameraOrientation} from './camera-orientation.js';
-import {runSelfCheck} from './self-check.js';
-import {createSelfCheckUI} from './self-check-ui.js';
+import {runSelfCheck} from './self-check.js?v=segment8';
+import {createSelfCheckUI} from './self-check-ui.js?v=segment8';
 import {simplifyUI} from './simplify-ui.js';
-import {createRepairTools} from './repair-tools.js';
 import {eyeUsable,eyeQualityLabel} from './eye-quality.js';
 import {DEFAULTS,VERSION,measureFrame,DisplayFilter} from './geometry.js?v=quality5';
 import {parseIntervals,phaseAt,summarize,scoreNIHSS} from './assessment.js';
 import {demoInput} from './fixtures.js';
-import {GazeRecorder,drawEyeMarkers,extensionFor,recordingCsv,recordingMime} from './recording.js?v=review7';
+import {GazeRecorder,drawEyeMarkers,extensionFor,recordingCsv,recordingMime} from './recording.js?v=segment8';
 import {convertVideo} from './video-export.js?v=repair6';
 import {startLiveLoop} from './live-loop.js?v=live3';
 import {captureVideoFrame,bitmapWithDeadline} from './frame-capture.js?v=live3';
@@ -235,7 +234,7 @@ $('cameraStart').onclick=async()=>{
     applyPreviewOrientation();
     await video.play();if(token!==generation)return;
     sourceInfo.settings={...sourceInfo.settings,width:video.videoWidth,height:video.videoHeight,frameRate:stream.getVideoTracks()[0].getSettings().frameRate};
-    sourceInfo.runtime={build:'review7',browser:navigator.userAgent,frameInput:'canvas-oriented-bitmap'};
+    sourceInfo.runtime={build:'segment8',browser:navigator.userAgent,frameInput:'canvas-oriented-bitmap'};
     stream.getVideoTracks()[0].onended=()=>{stop();status('Camera disconnected. Collected data can still be exported.');};
     await initWorker(token);if(token!==generation)return;
     startTime=performance.now();phaseStart=0;cameraReady=true;refreshRecordingControls();
@@ -334,7 +333,7 @@ $('recordStart').onclick=()=>{
     refreshRecordingControls();
   }catch(error){$('recordIndicator').textContent='Cannot record: '+error.message;refreshRecordingControls();}
 };
-$('recordStop').onclick=()=>{stop();status('Clip finished. Image self-check runs locally; open Clips to review.');};
+$('recordStop').onclick=()=>{stop();status('Clip finished. Segment analysis runs locally; open Clips to review.');};
 function saveBlob(blob,name){
   const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
@@ -362,20 +361,11 @@ function renderRecordings(){
     const playbackBox=document.createElement('details'),playbackTitle=document.createElement('summary');playbackTitle.textContent='Replay video';playbackBox.append(playbackTitle);
     const label=document.createElement('label');label.textContent='Playback version';const select=document.createElement('select');select.setAttribute('aria-label',`Clip ${i+1} Playback version`);
     for(const [value,text] of [['analysis','Analysis video · Same-frame eye markers'],['raw','Raw camera video']])select.add(new Option(text,value));
-    let repairUi;
-    const switchPlayback=()=>{if(select.value==='repaired')playbackBox.open=true;player.pause();player.hidden=select.value==='repaired';repairUi?.show(select.value==='repaired');if(!player.hidden){const url=select.value==='raw'?clip.rawUrl:clip.analysisUrl;if(player.src!==url){player.src=url;player.load();}}};
+    const switchPlayback=()=>{player.pause();const url=select.value==='raw'?clip.rawUrl:clip.analysisUrl;if(player.src!==url){player.src=url;player.load();}};
     select.onchange=switchPlayback;
-    repairUi=createRepairTools({clip,clipNumber:i+1,player,getPlaybackVersion:()=>select.value,
-      onVersionChange:(exists,activate)=>{
-        const option=Array.from(select.options).find(o=>o.value==='repaired');
-        if(exists&&!option)select.add(new Option('Repaired preview · Estimates in purple','repaired'));
-        if(!exists){option?.remove();select.value='analysis';}
-        else if(activate)select.value='repaired';
-        switchPlayback();
-      },saveBlob,busyMessage:repairBusyMessage,encode:encodeRepairedVideo,
-      prepareDownload:cleanup=>{clearPreparedDownload();preparedDownload=cleanup;}});
-    clip.repairUi=repairUi;
-    const checkUi=createSelfCheckUI({clip,clipNumber:i+1,retry:enqueueSelfCheck,saveBlob,watch:index=>{playbackBox.open=true;select.value='analysis';switchPlayback();player.pause();player.currentTime=clip.data.samples[index].analysisVideoTimeSeconds;player.scrollIntoView({block:'nearest'});}});clip.checkUi=checkUi;
+    const checkUi=createSelfCheckUI({clip,clipNumber:i+1,retry:enqueueSelfCheck,saveBlob,
+      busyMessage:repairBusyMessage,encode:encodeRepairedVideo,
+      prepareDownload:cleanup=>{clearPreparedDownload();preparedDownload=cleanup;}});clip.checkUi=checkUi;
     const buttons=document.createElement('div');buttons.className='buttons';const base=`gaze_recording_${r.id.slice(0,8)}`;
     const addButton=(text,action)=>{const b=document.createElement('button');b.textContent=text;b.onclick=action;buttons.append(b);};
     const exportLabel=document.createElement('label');exportLabel.textContent='Download format';exportLabel.htmlFor=`format-${r.id}`;
@@ -412,8 +402,8 @@ function renderRecordings(){
     if(clip.data.errors.length){const error=document.createElement('p');error.className='warning';error.textContent='Recording encountered errors: '+clip.data.errors.join('；');details.append(error);}
     const remove=document.createElement('button');remove.textContent='Remove clip';remove.className='remove-recording';remove.onclick=()=>{clip.checkController?.abort();clip.checkUi?.dispose();clip.repairUi?.dispose();player.pause();URL.revokeObjectURL(clip.analysisUrl);URL.revokeObjectURL(clip.rawUrl);recordedClips=recordedClips.filter(c=>c!==clip);renderRecordings();refreshRecordingControls();};
     const downloads=document.createElement('details'),downloadTitle=document.createElement('summary');downloadTitle.textContent='Downloads';downloads.append(downloadTitle,exportLabel,exportFormat,buttons,exportStatus,cancel,readyDownload,hint,remove);
-    const legacy=document.createElement('details'),legacyTitle=document.createElement('summary');legacyTitle.textContent='Advanced · Short-gap interpolation';legacy.append(legacyTitle,repairUi.element);
-    playbackBox.append(label,select,player);details.append(checkUi.element,playbackBox,downloads,legacy);list.append(details);
+    playbackTitle.textContent='Original recording files';
+    playbackBox.append(label,select,player);details.append(checkUi.element,playbackBox,downloads);list.append(details);
   }
   $('recordingsLimit').hidden=recordedClips.length<3;
   refreshRecordingControls();
@@ -445,7 +435,7 @@ function enqueueSelfCheck(clip){
       clip.checkState='running';emit();
       clip.checkReport=await runSelfCheck(clip,{signal:controller.signal,onProgress:(n,total)=>{clip.checkProgress=n+' / '+total;emit();}});
       clip.checkState='complete';
-    }catch(e){clip.checkState='stopped';clip.checkError=e.name==='AbortError'?'Self-check stopped. Tap Check images to retry.':e.message;}
+    }catch(e){clip.checkState='stopped';clip.checkError=e.name==='AbortError'?'Segment check stopped. Tap Check clip to retry.':e.message;}
     finally{clip.checkController=null;emit();}
   });
 }
