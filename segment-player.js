@@ -1,4 +1,4 @@
-import {selectedFrame,sampleAtTime} from './segment-review.js?v=clean10';
+import {selectedFrame,sampleAtTime} from './segment-review.js?v=closed12';
 import {drawEyeMarkers} from './recording.js';
 
 const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text)e.textContent=text;if(cls)e.className=cls;return e;};
@@ -82,7 +82,7 @@ export function makeReviewRenderer(clip,report,version='selected'){
     ctx.fillStyle='#dcebf4';ctx.font=Math.max(14,Math.min(20,w/40))+'px Segoe UI';
     ctx.fillText((version==='original'?'ORIGINAL TRACKING':'REVIEWED TRACKING')+' · '+time.toFixed(2)+' s',16,27,w-32);
     for(const [j,side]of ['left','right'].entries()){
-      const kind=s?.reviewKinds[side],label=kind==='blink'?'Blink · skipped':kind==='unresolved'?'Unresolved':value(s?.[side]);
+      const kind=s?.reviewKinds[side],label=kind==='closed'?'Eye closed':kind==='blink'?'Blink · skipped':kind==='unresolved'?'Unresolved':value(s?.[side]);
       ctx.fillStyle=kind==='estimated'?'#e4a0ff':'#cee6ec';ctx.fillText((side==='left'?'Left':'Right')+': '+(kind==='estimated'?'~ ':'')+label,16,53+j*25,w-32);
     }
     ctx.fillStyle='#a5bacc';ctx.fillText('Purple = accepted estimate · NIHSS unchanged',16,104,w-32);

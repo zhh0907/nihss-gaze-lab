@@ -1,6 +1,6 @@
-import {chooseSegment,segmentCsv} from './segment-review.js?v=clean10';
-import {createSegmentPreview,createReviewedPlayer,makeReviewRenderer,reviewedVideoSize} from './segment-player.js?v=clean10';
-import {createEyeMotionPlayer,makeEyeMotionRenderer,clipGazeSuggestion,reviewedSamples,EYE_VIDEO_SIZE} from './eye-motion.js?v=clean10';
+import {chooseSegment,segmentCsv} from './segment-review.js?v=closed12';
+import {createSegmentPreview,createReviewedPlayer,makeReviewRenderer,reviewedVideoSize} from './segment-player.js?v=closed12';
+import {createEyeMotionPlayer,makeEyeMotionRenderer,clipGazeSuggestion,reviewedSamples,EYE_VIDEO_SIZE} from './eye-motion.js?v=closed12';
 import {parseIntervals,NIHSS_SOURCE} from './assessment.js';
 import {recordingMime,extensionFor} from './recording.js';
 import {convertVideo} from './video-export.js';
@@ -36,11 +36,13 @@ export function createSelfCheckUI({clip,clipNumber,retry,saveBlob,busyMessage=()
     if(!segment){panels.append(el('p','No segments to review.','hint'));summary();return;}
     preview=createSegmentPreview({clip,report:r,segment,onChoose:choose,disabled:!!controller});panels.append(preview.element);
     const coverage=el('p',`${segment.proposedCount} suggested${segment.unresolvedCount?` · ${segment.unresolvedCount} unresolved`:''}`,'hint compact-coverage');
-    const footer=el('div',null,'review-footer'),uncertain=el('button','Unresolved'),reset=el('button','Undo');
+    const footer=el('div',null,'review-footer'),closed=el('button','Eye closed'),uncertain=el('button','Unresolved'),reset=el('button','Undo');
+    closed.type='button';closed.disabled=!!controller;closed.setAttribute('aria-label',`Mark ${segment.side} eye closed for this segment`);
+    closed.setAttribute('aria-pressed',String(segment.decision==='closed'));closed.onclick=()=>choose('closed');
     uncertain.disabled=!!controller;uncertain.setAttribute('aria-pressed',String(segment.decision==='uncertain'));uncertain.onclick=()=>choose('uncertain');
-    reset.disabled=segment.decision==='unreviewed'||!!controller;reset.onclick=()=>choose('unreviewed');footer.append(uncertain,reset);
-    const evidence=el('details',null,'review-reasons');evidence.append(el('summary',segment.decision==='uncertain'?'Marked unresolved · Details':'Details'),el('p',segment.reasons.join(' · '),'hint'),
-      el('p','Tap a picture to choose for this eye segment. Purple = estimate. Unsupported suggested positions remain empty. Blinks are skipped.','hint'));
+    reset.disabled=segment.decision==='unreviewed'||!!controller;reset.onclick=()=>choose('unreviewed');footer.append(closed,uncertain,reset);
+    const evidence=el('details',null,'review-reasons');evidence.append(el('summary',segment.decision==='closed'?'Marked eye closed · Details':segment.decision==='uncertain'?'Marked unresolved · Details':'Details'),el('p',segment.reasons.join(' · '),'hint'),
+      el('p','Tap a picture to choose for this eye segment. Eye closed excludes this eye throughout the displayed interval. Purple = estimate. Unsupported positions remain empty. Blinks are skipped.','hint'));
     panels.append(coverage,footer,evidence);summary();
   }
   function updateResult(){
@@ -109,7 +111,7 @@ export function createSelfCheckUI({clip,clipNumber,retry,saveBlob,busyMessage=()
     }
     const data=el('details');data.append(el('summary','Review data'));
     const json=el('button','Download review JSON'),csv=el('button','Download review CSV');
-    json.onclick=()=>saveBlob(new Blob([JSON.stringify({schema:'gaze-reviewed-motion-3',original:clip.data,review:clip.checkReport,
+    json.onclick=()=>saveBlob(new Blob([JSON.stringify({schema:'gaze-reviewed-motion-4',original:clip.data,review:clip.checkReport,
       reviewedSamples:reviewedSamples(clip,clip.checkReport),phaseOverrides:clip.reviewIntervals??null,clinicalObservation:clip.clinicalObservation??null,suggestion:clipGazeSuggestion(clip,clip.checkReport)},null,2)],{type:'application/json'}),base+'_review.json');
     csv.onclick=()=>saveBlob(new Blob([segmentCsv(clip.checkReport)],{type:'text/csv;charset=utf-8'}),base+'_review.csv');
     data.append(json,csv);downloads.append(format.label,buttons,exportHint,stop,save,exportStatus,data);

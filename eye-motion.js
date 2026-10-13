@@ -1,4 +1,4 @@
-import {selectedFrame,sampleAtTime} from './segment-review.js?v=clean10';
+import {selectedFrame,sampleAtTime} from './segment-review.js?v=closed12';
 import {summarize,scoreNIHSS,phaseAt,NIHSS_SOURCE} from './assessment.js';
 import {eyeUsable} from './eye-quality.js';
 
@@ -21,7 +21,7 @@ export function eyeDiagramState(sample){
   return Object.fromEntries(['right','left'].map(side=>{
     const kind=sample?.reviewKinds?.[side]??'original',usable=eyeUsable(sample,side);
     return [side,{position:usable?sample[side].corrected:null,kind,
-      label:kind==='blink'?'Blink':kind==='unresolved'?'Unresolved':!usable?'No measurement':kind==='estimated'?'Accepted estimate':'Observed'}];
+      label:kind==='closed'?'Eye closed':kind==='blink'?'Blink':kind==='unresolved'?'Unresolved':!usable?'No measurement':kind==='estimated'?'Accepted estimate':'Observed'}];
   }));
 }
 

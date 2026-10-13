@@ -165,12 +165,18 @@ export function buildSegmentReview(report){
 }
 
 export function chooseSegment(report,id,decision,now=new Date().toISOString()){
-  if(!['unreviewed','original','suggestion','uncertain'].includes(decision))throw Error('Invalid segment choice');
+  if(!['unreviewed','original','suggestion','uncertain','closed'].includes(decision))throw Error('Invalid segment choice');
   const segment=report.segments.find(s=>s.id===id);if(!segment)throw Error('Segment not found');
   if(decision==='suggestion'&&!segment.proposedCount)throw Error('No supported replacement in this segment');
   segment.decision=decision;segment.decidedAt=decision==='unreviewed'?null:now;
-  const indices=new Set(segment.flaggedIndices);
-  for(const f of report.frames)if(indices.has(f.sourceIndex)){const e=f[segment.side];e.decision=decision;e.decidedAt=segment.decidedAt;}
+  const indices=new Set(segment.sourceIndices??segment.flaggedIndices),flagged=new Set(segment.flaggedIndices);
+  // An examiner's closure label covers the entire displayed eye segment,
+  // including apparently valid samples between suspect frames. Other choices
+  // reset those intervening samples so a previous closure never leaks through.
+  for(const f of report.frames)if(indices.has(f.sourceIndex)){
+    const e=f[segment.side],apply=decision==='closed'||flagged.has(f.sourceIndex);
+    e.decision=apply?decision:'unreviewed';e.decidedAt=apply?segment.decidedAt:null;
+  }
   return segment;
 }
 
@@ -179,6 +185,7 @@ export function selectedFrame(sample,review,version='selected'){
   for(const side of SIDES){
     const e=review?.[side];out.reviewKinds[side]='original';
     if(e?.ignored){out[side]=null;out.reviewKinds[side]='blink';continue;}
+    if(version==='selected'&&e?.decision==='closed'){out[side]=null;out.reviewKinds[side]='closed';continue;}
     if(version==='original'||!e?.flagged)continue;
     const use=version==='proposal'||e.decision==='suggestion';
     if(use&&e.proposal){out[side]=structuredClone(e.proposal);out.reviewKinds[side]='estimated';}

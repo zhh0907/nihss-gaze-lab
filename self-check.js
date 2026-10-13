@@ -1,4 +1,4 @@
-import {SEGMENT_VERSION,SIDES,LIMITS,buildSegmentReview} from './segment-review.js?v=segment8';
+import {SEGMENT_VERSION,SIDES,LIMITS,buildSegmentReview} from './segment-review.js?v=closed12';
 import {eyeEvidence} from './eye-image-evidence.js?v=segment8';
 import {bitmapWithDeadline} from './frame-capture.js';
 
@@ -21,7 +21,7 @@ export async function runSelfCheck(clip,{signal,onProgress=()=>{}}={}) {
       pending.reject=e=>{clearTimeout(timer);reject(e);};
     });
   }
-  const report={schema:'gaze-segment-review-2',version:SEGMENT_VERSION,createdAt:new Date().toISOString(),sourceRecordingId:clip.data.recording.id,
+  const report={schema:'gaze-segment-review-3',version:SEGMENT_VERSION,createdAt:new Date().toISOString(),sourceRecordingId:clip.data.recording.id,
     clinicalUse:false,originalDataModified:false,method:'Whole-run bidirectional iris-candidate fitting in head-relative coordinates',limits:LIMITS,
     limitations:['Experimental visible-iris ellipse evidence can fail on reflections, eyelashes or light irises.','Short stable bridges are estimates; hidden motion cannot be excluded.','Blinks require closure, a high blink score and reopening within 650 ms; sustained occlusion is retained.','No automatic NIHSS rescore.','Only archived analysis frames are checked; unarchived intervals remain untouched.'],
     frames:[],coverage:{checked:0,total:clip.data.samples.length,unchecked:clip.data.samples.length},reviewer:''};

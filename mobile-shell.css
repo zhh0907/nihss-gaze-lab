@@ -112,7 +112,7 @@ body.app-mode .app-source-summary{font-size:11px}
 .compact-review .segment-preview>p{font-size:11px;line-height:1.3;margin:3px 0;min-height:15px}
 .compact-review .compact-coverage{font-size:11px;line-height:1.4;margin:5px 0}
 .review-footer{display:flex;gap:8px;justify-content:space-between}
-.review-footer button{font-size:12px;padding:6px 8px;background:transparent;min-height:38px}
+.review-footer button{flex:1;min-width:0;font-size:12px;padding:6px 8px;background:transparent;min-height:44px}
 .review-footer button[aria-pressed=true]{background:#675032;color:#ffe4b1}
 .review-progress{font-size:11px;margin:5px 0;text-align:right}
 .review-reasons summary{font-size:12px;cursor:pointer}.review-reasons{margin-top:4px}
