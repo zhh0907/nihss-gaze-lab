@@ -1,0 +1,58 @@
+/* Mobile is an instrument workspace. Secondary material lives in the drawer. */
+.mobile-app[hidden]{display:none!important}
+body.app-mode{height:100dvh;overflow:hidden;padding:0}
+.app-mode>.desktop-content{display:none!important}
+.mobile-app{--line:#2b4452;--muted:#96aebe;height:100vh;height:100dvh;min-height:340px;display:flex;flex-direction:column;gap:8px;padding:env(safe-area-inset-top) max(10px,env(safe-area-inset-right)) max(4px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left));background:#09131c}
+.app-topbar{height:52px;flex:none;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)}
+.app-brand{flex:1;min-width:0}.app-brand strong{font-size:17px;letter-spacing:-.3px;display:block}.app-brand span{display:block;font-size:10px;color:var(--muted);margin-top:2px}
+.app-menu{width:auto!important;min-width:80px;flex:none;background:#17332f;border-color:#396458;font-size:13px!important;min-height:44px}
+.app-topbar #sourceBadge{font-size:10px;max-width:105px;white-space:normal;padding:4px 7px;line-height:1.3}
+.app-workspace{display:flex;flex-direction:column;gap:8px;flex:1;min-height:0;min-width:0}
+.app-visuals{display:grid;gap:8px;flex:1;min-height:0;min-width:0;grid-template-rows:minmax(0,.42fr) minmax(0,.58fr)}
+.mobile-app #eyeFocus{height:auto!important;min-height:0;margin:0;border:1px solid #3b605b;background:#0e1d28;border-radius:12px}
+.mobile-app #eyeFocus .caption{font-size:11px;top:9px;left:12px}.mobile-app .eyeHint{display:none}
+.mobile-app #eyeFocus:fullscreen{height:100vh!important;width:100vw;border:0;border-radius:0}
+.mobile-app #cameraPanel{height:auto;min-height:0;position:relative;display:flex;flex-direction:column;padding:0!important;margin:0!important;overflow:hidden;border:1px solid var(--line)}
+.mobile-app #cameraPanel h2{position:absolute;top:9px;left:12px;z-index:3;margin:0;font-size:11px;background:#09131cd9;padding:4px 7px;border-radius:6px;pointer-events:none}
+.mobile-app #cameraPanel>.muted{display:none}
+.mobile-app #cameraPreview{width:100%!important;min-height:0!important;height:100%;flex:1;position:relative}
+.mobile-app #cameraVideo,.mobile-app #cameraOverlay{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;object-fit:contain}
+.camera-empty{position:absolute;inset:0;display:grid;place-content:center;text-align:center;font-size:13px;color:#92b4c6;padding:32px;transform:scaleX(-1);pointer-events:none}
+.mobile-app .view{height:auto;min-height:0}.mobile-app .view .caption{font-size:10px}.mobile-app .view .inset{display:none}.mobile-app .view-tools{top:auto;bottom:8px;left:8px}
+.app-details{flex:none;min-width:0;display:grid;gap:5px}.app-source-summary{color:var(--muted);font-size:11px;text-align:center;line-height:1.4}
+.mobile-app #scrub{margin:0;min-height:28px;height:28px}
+.app-status{flex:none;min-height:0;max-height:62px;overflow:auto;scrollbar-width:thin}
+.app-status p{margin:0!important;font-size:11px!important;line-height:1.45!important;overflow-wrap:anywhere}
+.app-actions{display:flex;gap:8px;flex:none;padding:3px 0;min-height:50px}
+.app-actions>*,.action-pair{min-width:0;flex:1}.app-actions button{min-height:48px;font-size:13px;font-weight:600;padding:8px}
+.action-pair{display:flex}.action-pair>button{flex:1}.app-actions #cameraStart{background:#256956;border-color:#408f77}.app-actions #recordStart:not(:disabled){background:#793c45;border-color:#b45b66}
+.app-superseded{display:none!important}.app-footnote{text-align:center;font-size:10px;color:#8da4b5;flex:none;line-height:1.3}
+.mobile-app[data-app=gaze] .app-visuals{display:flex}
+.mobile-app .stage{width:100%;height:100%;flex:1;min-height:0;aspect-ratio:auto;max-height:none}
+.mobile-app .stage canvas,.mobile-app .stage video{object-fit:contain}
+.mobile-app .metrics{display:grid;grid-template-columns:1fr 1fr;gap:5px 12px}
+.mobile-app .metrics>div{padding-top:4px}.mobile-app .metrics span{font-size:10px;line-height:1.2}
+.mobile-app .metrics b{font-size:19px;margin-top:2px;font-variant-numeric:tabular-nums;line-height:1.2}
+.mobile-app #headValue,.mobile-app #coverageValue{font-size:12px}
+.app-phase{display:flex;align-items:center;gap:10px}.app-phase label{flex:none;font-size:11px;margin:0!important}.app-phase select{flex:1;min-width:0;height:44px;min-height:44px;font-size:16px;padding:5px 8px}
+.mobile-app #recordIndicator{font-size:10px;line-height:1.3;max-height:30px;overflow:auto;color:#9eb5c5}
+.mobile-app.is-recording #recordIndicator{color:#ffb0a9}.mobile-app.is-recording .app-topbar{border-bottom-color:#b35c5c}
+.mobile-app .clip-shortcut{flex:0 0 65px;font-size:12px}
+.app-drawer{box-sizing:border-box;position:fixed;inset:0 0 0 auto;margin:0;border:0;border-left:1px solid #365061;background:#101d28;color:#e4edf5;width:min(440px,calc(100vw - 24px));max-width:none;max-height:none;height:100vh;height:100dvh;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);overflow:hidden}
+.app-drawer[open]{display:flex;flex-direction:column}.app-drawer::backdrop{background:#020810a8;backdrop-filter:blur(2px)}
+.drawer-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 14px;border-bottom:1px solid #304454;flex:none}.drawer-head h2{font-size:18px;margin:0}.drawer-close{width:auto!important;min-height:44px}
+.drawer-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:8px 10px;flex:none;border-bottom:1px solid #304454}.drawer-tabs button{min-height:44px;padding:6px 2px;font-size:12px}.drawer-tabs [aria-pressed=true]{background:#276654;border-color:#70be9f}
+.drawer-content{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:12px max(12px,env(safe-area-inset-right)) 28px 12px}
+.drawer-pane>*{min-width:0;max-width:100%}.drawer-pane aside{border:0;border-radius:0;padding:0!important;background:none}.drawer-pane .panel,.drawer-pane .card{padding:12px!important;margin:12px 0}
+.drawer-pane table{min-width:540px}.drawer-pane .table-wrap,.drawer-pane .panel{overflow-x:auto}.drawer-pane #view{height:290px}.drawer-pane .assessment,.drawer-pane .workspace{display:block}.drawer-pane .form-grid{display:block}.drawer-pane .exports{display:block}.drawer-pane .exports .buttons{min-width:0}
+.drawer-pane #live .card-heading,.drawer-pane #live .record-bar{display:none}.drawer-pane .recorded-clip .buttons{display:grid;grid-template-columns:1fr 1fr}.drawer-pane .recorded-clip .buttons button{min-width:0}
+.app-help p{font-size:14px;line-height:1.7;color:#acbecd}.app-help .button{display:block;margin:16px 0}.drawer-pane input:not([type=range]):not([type=checkbox]),.drawer-pane select,.drawer-pane textarea{font-size:16px!important}
+@media(max-height:680px){.mobile-app{gap:5px}.app-topbar{height:46px}.mobile-app .metrics{gap:3px 10px}.mobile-app .metrics b{font-size:17px}.mobile-app #headValue,.mobile-app #coverageValue{font-size:11px}.app-footnote{font-size:9px}}
+@media(orientation:landscape) and (max-height:600px){
+ .mobile-app{gap:5px}.app-topbar{height:46px}.app-brand span,.app-footnote{display:none}
+ .mobile-app[data-app=simulator] .app-visuals{grid-template-rows:minmax(0,1fr);grid-template-columns:1fr 1fr}
+ .mobile-app[data-app=simulator] .app-details{display:none}
+ .mobile-app[data-app=gaze] .app-workspace{flex-direction:row}.mobile-app[data-app=gaze] .app-visuals{flex:1.4}.mobile-app[data-app=gaze] .app-details{flex:1;align-content:center}
+ .mobile-app .metrics{gap:5px 8px}.app-actions{min-height:46px}.app-actions button{min-height:44px}.app-status{max-height:32px}
+}
+@media(prefers-reduced-motion:no-preference){.app-drawer[open]{animation:drawer-enter .18s ease-out}@keyframes drawer-enter{from{transform:translateX(32px);opacity:.4}to{transform:none;opacity:1}}}

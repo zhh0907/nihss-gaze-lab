@@ -4,6 +4,16 @@ An independent English, mobile-friendly research web app by Honghao Zhao.
 Once published, visitors open the HTTPS website directly. They do not need
 Python, a local server, a GitHub account, or an app installation.
 
+## Mobile workspace
+
+On phones, the app opens directly into a single-screen live workspace. Use **Tools** to open the side panel. Primary controls stay on the main screen. Opening tools does not stop the camera or a recording. Rotate the phone to use the landscape layout.
+
+Video, independent eye measurements, head pose, phase selection and recording controls remain visible. **Setup** contains camera/import/format options; **Clips** contains replay and downloads; **Review** contains the evidence and examiner form.
+
+## Video formats
+
+Choose **MP4** or **WebM** in Setup before recording. Unsupported encoders are disabled based on this browser. In Clips, **Download format** selects the original, MP4, or WebM for either the raw or annotated video. Original downloads preserve the exact recorded file. Conversion runs locally, takes roughly the clip duration, re-encodes at up to 30 fps, and can change frame timing or quality. Tap Save when conversion finishes. Keep the tab visible; cancel leaves originals intact. For frame-sensitive research, use the original recording and its JSON/CSV timestamps. No audio is recorded.
+
 ## Publish with the GitHub website
 
 1. Create a new **public** repository, for example `nihss-gaze-lab`. GitHub Free supports
@@ -38,8 +48,7 @@ Use a current Safari or Chrome browser; if an embedded app browser cannot access
 the camera, open the link in the full browser. Tap Start camera and allow camera
 access. Select Front or Rear before starting; stop before switching cameras.
 Keep the page visible and the screen awake. Keep a fixed orientation during a
-recording; start a new clip after changing orientation. Use the top navigation
-to jump between controls, live view and results.
+recording; start a new clip after changing orientation. Use Tools to open secondary controls and results; the live view stays on the main screen.
 
 Models are downloaded on first use and run locally. Startup depends on network
 speed and the phone. Camera video, recordings and analysis stay in the browser;

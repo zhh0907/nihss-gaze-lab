@@ -1,9 +1,10 @@
 // All media stays in memory until the user downloads it. Detection frames are
 // copied BEFORE transfer to the worker; overlays never use a newer camera frame.
 export const RECORDING_SCHEMA='gaze-recording-1';
-export function recordingMime(Recorder=globalThis.MediaRecorder) {
+export function recordingMime(Recorder=globalThis.MediaRecorder,format='auto') {
   if(!Recorder)return null;
-  return ['video/webm;codecs=vp8','video/webm;codecs=vp9','video/webm','video/mp4'].find(type=>Recorder.isTypeSupported(type))??null;
+  const types={mp4:['video/mp4;codecs=avc1.42E01E','video/mp4'],webm:['video/webm;codecs=vp8','video/webm;codecs=vp9','video/webm']};
+  return (format==='auto'?[...types.mp4,...types.webm]:types[format]??[]).find(type=>Recorder.isTypeSupported(type))??null;
 }
 export const extensionFor=mime=>mime.startsWith('video/mp4')?'mp4':'webm';
 const fmt=(n,d=3)=>Number.isFinite(n)?n.toFixed(d):'—';
@@ -51,11 +52,12 @@ export class GazeRecorder {
   get id(){return this.active?this.current.id:null;}
   get supported(){return !!recordingMime() && typeof HTMLCanvasElement.prototype.captureStream==='function';}
 
-  start({stream,video,sessionOriginPerf,metadata,phase}) {
+  start({stream,video,sessionOriginPerf,metadata,phase,format='auto'}) {
     if(this.busy)throw Error('The previous clip is still being finalized. Try again shortly.');
     if(!this.supported)throw Error('Recording is unavailable in this browser. Try a browser with MediaRecorder and canvas capture support.');
     if(!stream?.getVideoTracks().some(t=>t.readyState==='live') || !video.videoWidth)throw Error('Start the camera and wait for detection first.');
-    const mime=recordingMime(),canvas=document.createElement('canvas');
+    const mime=recordingMime(globalThis.MediaRecorder,format),canvas=document.createElement('canvas');
+    if(!mime)throw Error(`${format.toUpperCase()} recording is unavailable in this browser. Choose another format.`);
     const scale=Math.min(1,1280/video.videoWidth,960/video.videoHeight);
     const width=Math.round(video.videoWidth*scale/2)*2,frameHeight=Math.round(video.videoHeight*scale/2)*2;
     canvas.width=width;canvas.height=frameHeight+144;
