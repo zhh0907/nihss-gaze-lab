@@ -1,7 +1,7 @@
 import {cameraOrientation} from './camera-orientation.js';
 import {runSelfCheck} from './self-check.js?v=clean10';
 import {createSelfCheckUI} from './self-check-ui.js?v=clean10';
-import {simplifyUI} from './simplify-ui.js';
+import {simplifyUI} from './simplify-ui.js?v=live11';
 import {eyeUsable,eyeQualityLabel} from './eye-quality.js';
 import {DEFAULTS,VERSION,measureFrame,DisplayFilter} from './geometry.js?v=quality5';
 import {parseIntervals,phaseAt,summarize,scoreNIHSS} from './assessment.js';
@@ -22,27 +22,33 @@ function clearPreparedDownload(){preparedDownload?.();preparedDownload=null;}
 const video=$('video'),overlay=$('overlay'),filter=new DisplayFilter();
 let source='none',sourceInfo={},samples=[],summary=summarize([]),sessionId=sessionUUID();
 let config={...DEFAULTS},worker=null,stream=null,fileUrl=null,generation=0,running=false;
-let nextId=0,pending=new Map(),stopLiveLoop=null,healthTimer=null,startTime=0,phaseStart=0,frameNo=0;
+let nextId=0,pending=new Map(),stopLiveLoop=null,healthTimer=null,startTime=0,frameNo=0;
 let lastTrackingUpdate=0,recentUpdates=[];
 let intervals=[],captureCanvas=document.createElement('canvas');
 let clinicalHistory=[];
 let cameraReady=false,recordedClips=[];
 const recording=new GazeRecorder({
   onState:state=>{
-    $('recordIndicator').textContent=state.state==='recording'?`● Recording ${state.elapsed.toFixed(1)} s · ${state.frames} analysis frames`:state.state==='finalizing'?'Finalizing recording…':'Recording saved. Open Clips to replay or download.';
+    recordStatus(state.state==='recording'?`● ${state.elapsed.toFixed(1)} s`:state.state==='finalizing'?'Saving…':'');
     $('recordIndicator').classList.toggle('recording',state.state==='recording');
     // State callbacks occur inside the recorder's transition.
     queueMicrotask(refreshRecordingControls);
   },
   onClip:clip=>{recordedClips.push(clip);renderRecordings();enqueueSelfCheck(clip);window.dispatchEvent(new Event('clipcreated'));},
-  onError:message=>{$('recordIndicator').textContent='Recording error: '+message;},
+  onError:message=>{recordStatus('Recording error: '+message,true);},
 });
 const reasonNames={'no-face':'No face detected','multiple-faces':'Multiple faces','pose-unavailable':'Head pose unavailable','head-out-of-range':'Head pose outside current limits','eye-unavailable':'Eye landmarks missing','eye-out-of-frame':'Eye outside frame','eye-too-small':'Eye too small in image','blink-or-occlusion':'Blink / occlusion','iris-outside-eye':'Iris location invalid'};
 const phaseNames={center:'Center / rest',left:'Subject looks left',right:'Subject looks right',reflex:'Clinical reflex exam',unlabelled:'Unlabelled'};
 const fmt=(v,n=3)=>Number.isFinite(v)?v.toFixed(n):'—';
 
 function observation(){return {reviewer:$('reviewer').value.trim(),examAdequate:$('examAdequate').value,finding:$('finding').value,overcome:$('overcome').value,reflexAssessed:$('reflexAssessed').value,useVideoEvidence:$('evidenceSource').value==='video'};}
-function status(message){$('status').textContent=message;}
+function status(message){$('status').textContent=message;$('status').hidden=!message;}
+function recordStatus(message,error=false){
+  const indicator=$('recordIndicator');
+  // Keep an encoder failure visible through the finalizing/idle callbacks.
+  if(!error&&indicator.classList.contains('warning'))return;
+  indicator.textContent=message;indicator.hidden=!message;indicator.classList.toggle('warning',error);
+}
 function trackingHealth(){
   const now=performance.now(),age=lastTrackingUpdate?now-lastTrackingUpdate:now-startTime;
   recentUpdates=recentUpdates.filter(t=>now-t<1000);
@@ -61,7 +67,6 @@ function setRunning(value){
   running=value;
   for(const id of ['cameraStart','cameraFacing','videoFile','demo','demoScenario','fov','inputMirrored','intervals']) $(id).disabled=value;
   $('analyze').disabled=value || source!=='file';$('stop').disabled=!value;
-  $('phase').disabled=source==='file'||source==='demo';
   refreshRecordingControls();
 }
 function resetClinical(){
@@ -83,7 +88,7 @@ function disposeWorker(){
 function stop(){
   recording.stop('camera-stopped');cameraReady=false;
   generation++;stopLiveLoop?.();stopLiveLoop=null;clearInterval(healthTimer);healthTimer=null;disposeWorker();
-  if(source==='camera'){$('trackingHealth').textContent=`Tracking stopped · ${samples.length} updates`;video.hidden=true;$('empty').hidden=false;$('empty').textContent='Camera stopped. Open Clips to review.';$('sourceBadge').textContent='Camera stopped';overlay.getContext('2d').clearRect(0,0,overlay.width,overlay.height);}
+  if(source==='camera'){$('trackingHealth').hidden=true;$('trackingHealth').classList.remove('warning');video.hidden=true;$('empty').hidden=false;$('empty').textContent='Camera off';$('sourceBadge').textContent='Camera stopped';overlay.getContext('2d').clearRect(0,0,overlay.width,overlay.height);}
   stream?.getTracks().forEach(t=>t.stop());stream=null;
   video.pause();if(video.srcObject)video.srcObject=null;video.controls=source==='file';
   setRunning(false);filter.reset();updateSummary();
@@ -158,7 +163,7 @@ function accept(result,t,phase,phaseStartValue,inferenceMs=null,truth=null){
   drawOverlay(sample,width,height);
   if(frameNo++%5===0){updateSummary();drawTrace();}
   const reasons=[...measured.reasons,...(measured.left?.reasons??[]),...(measured.right?.reasons??[])];
-  status(`${source==='demo'?'Demo · ':''}${measured.valid?'Eyes tracked':Array.from(new Set(reasons)).map(r=>reasonNames[r]??r).join(' / ')}`);
+  status(measured.valid?'':Array.from(new Set(reasons)).map(r=>reasonNames[r]??r).join(' / '));
   return sample;
 }
 function previewFlipped(){return source==='camera' && cameraOrientation($('cameraFacing').value,sourceInfo.settings,$('previewFlip').checked).previewMirrored;}
@@ -225,7 +230,7 @@ function renderDecision(){
 
 $('cameraStart').onclick=async()=>{
   cleanupInput();source='camera';sourceInfo={type:'camera',startedAt:new Date().toISOString(),inputMirrored:false};clearMeasurements();
-  $('fileControls').hidden=true;$('phase').value='unlabelled';$('sourceBadge').textContent='Live camera';setRunning(true);const token=generation;
+  $('fileControls').hidden=true;$('sourceBadge').textContent='Live camera';setRunning(true);const token=generation;
   try{
     readConfig();if(!navigator.mediaDevices?.getUserMedia)throw Error('Camera access requires HTTPS on a phone, or localhost on this computer. Open the page in a current browser and allow camera access.');
     status('Requesting camera permission…');const acquired=await navigator.mediaDevices.getUserMedia({audio:false,video:{width:{ideal:1280},height:{ideal:720},facingMode:{ideal:$('cameraFacing').value}}});
@@ -237,14 +242,15 @@ $('cameraStart').onclick=async()=>{
     sourceInfo.runtime={build:'segment8',browser:navigator.userAgent,frameInput:'canvas-oriented-bitmap'};
     stream.getVideoTracks()[0].onended=()=>{stop();status('Camera disconnected. Collected data can still be exported.');};
     await initWorker(token);if(token!==generation)return;
-    startTime=performance.now();phaseStart=0;cameraReady=true;refreshRecordingControls();
+    startTime=performance.now();cameraReady=true;refreshRecordingControls();
     lastTrackingUpdate=0;recentUpdates=[];trackingHealth();healthTimer=setInterval(trackingHealth,500);
     stopLiveLoop=startLiveLoop({video,onMode:mode=>{sourceInfo.runtime.frameScheduler=mode;},onError:e=>{if(token===generation){stop();status(e.message);}},onFrame:async(metadata,frameInfo)=>{
       if(token!==generation)return;
-      const t=(performance.now()-startTime)/1000,phase=$('phase').value,start=phaseStart;
+      const t=(performance.now()-startTime)/1000;
       const data=await detect(t,token);
       if(token!==generation){data.recordingImage?.close();return;}
-      const sample=accept(data.result,t,phase,start,data.inferenceMs);
+      // Live capture is unlabelled; exam intervals can be added when reviewing the clip.
+      const sample=accept(data.result,t,'unlabelled',0,data.inferenceMs);
       sample.cameraMediaTimeSeconds=metadata?.mediaTime??video.currentTime;
       sample.cameraPresentedFrames=metadata?.presentedFrames??null;
       sample.cameraFrameScheduler=frameInfo.mode;
@@ -253,8 +259,7 @@ $('cameraStart').onclick=async()=>{
     }});
   }catch(e){if(token===generation){stop();status('Cannot start: '+e.message);}}
 };
-$('phase').onchange=()=>{if(running && source==='camera'){phaseStart=(performance.now()-startTime)/1000;recording.markPhase($('phase').value,phaseStart);}};
-$('stop').onclick=()=>{stop();status('Stopped. Collected data remains available for review and export.');};
+$('stop').onclick=()=>{stop();status('');};
 $('videoFile').onchange=async()=>{
   const file=$('videoFile').files?.[0];if(!file)return;
   cleanupInput();source='file';sourceInfo={type:'file',name:file.name,bytes:file.size};clearMeasurements();$('intervals').value='';intervals=[];
@@ -298,7 +303,7 @@ function runDemo(scenario=$('demoScenario').value){
   for(let i=0;i<195;i++){
     const t=i/15,d=demoInput(t,scenario);accept(d.result,t,d.phase,d.phaseStart,null,d.truth);
   }
-  updateSummary();drawTrace();status('Demo complete. Compare head motion, one-eye limitation and occlusion. Synthetic landmarks bypass the real detector.');
+  updateSummary();drawTrace();status('');
 }
 $('demo').onclick=()=>runDemo();
 for(const id of ['reviewer','examAdequate','finding','overcome','reflexAssessed','evidenceSource']) $(id).addEventListener('change',()=>{
@@ -323,17 +328,18 @@ function refreshRecordingControls(){
   $('recordStart').disabled=!recording.supported||!cameraReady||source!=='camera'||!running||recording.busy||recordedClips.length>=3||!!activeConversion;
   $('recordStop').disabled=!recording.active;
   $('recordFormat').disabled=recording.busy;
-  if(!recording.supported)$('recordIndicator').textContent='Recording is unavailable in this browser. Try a browser with MediaRecorder and canvas capture support.';
+  if(!recording.supported)recordStatus('Recording unavailable in this browser.',true);
 }
 $('recordStart').onclick=()=>{
   try{
     const {samples:ignoredSamples,summary:ignoredSummary,observation:ignoredObservation,decision:ignoredDecision,clinicalHistory:ignoredHistory,...metadata}=exportObject();
     if(activeConversion)throw Error('Finish or cancel the video conversion before recording.');
-    recording.start({stream,video,sessionOriginPerf:startTime,metadata,phase:$('phase').value,format:$('recordFormat').value});
+    $('recordIndicator').classList.remove('warning');
+    recording.start({stream,video,sessionOriginPerf:startTime,metadata,phase:'unlabelled',format:$('recordFormat').value});
     refreshRecordingControls();
-  }catch(error){$('recordIndicator').textContent='Cannot record: '+error.message;refreshRecordingControls();}
+  }catch(error){recordStatus('Cannot record: '+error.message,true);refreshRecordingControls();}
 };
-$('recordStop').onclick=()=>{stop();status('Clip finished. Segment analysis runs locally; open Clips to review.');};
+$('recordStop').onclick=()=>{stop();status('');};
 function saveBlob(blob,name){
   const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
 }

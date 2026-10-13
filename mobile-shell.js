@@ -41,7 +41,7 @@ function initialize() {
   drawer.addEventListener('close',()=>menu.setAttribute('aria-expanded','false'));
   function move(node,host){if(!node)return;if(!homes.has(node)){const marker=document.createComment('desktop position');node.before(marker);homes.set(node,marker);}host.append(node);}
   const help=el('div','app-help');
-  help.innerHTML=simulator?'<h2>Use the live view</h2><p>Keep your hand in the camera frame. The eye preview stays above the hand video in portrait, and beside it in landscape.</p><p>Setup contains the camera, model, replay, and calibration controls. Scene contains the optional 3D view. Results contains charts and training comparisons.</p>':'<h2>Record an exam</h2><p>Start the camera, wait for tracking, and select the current exam phase. Record starts both the original video and a video with eye measurements.</p><p>Use Setup to choose MP4 or WebM before recording. Open Clips to replay or download. Review contains movement evidence and the examiner form.</p><p>Eye positions are normalized, not angles. A tracking result alone does not establish an NIHSS score.</p>';
+  help.innerHTML=simulator?'<h2>Use the live view</h2><p>Keep your hand in the camera frame. The eye preview stays above the hand video in portrait, and beside it in landscape.</p><p>Setup contains the camera, model, replay, and calibration controls. Scene contains the optional 3D view. Results contains charts and training comparisons.</p>':'<h2>Record an exam</h2><p>Start the camera, then record. Record starts both the original video and a video with eye measurements.</p><p>Use Setup to choose MP4 or WebM before recording. Open Clips to replay or download. Add exam phases later in Eye motion → Exam details. Review contains movement evidence and the examiner form.</p><p>Eye positions are normalized, not angles. A tracking result alone does not establish an NIHSS score.</p>';
   const guide=el('a','button','Full guide ↗');guide.href='./guide.html';guide.target='_blank';guide.rel='noopener';help.append(guide);panes.Help.append(help);
   let active=false, timer=null, secondary=null;
   const blank=el('div','camera-empty','Start camera, then show your index finger');
@@ -62,9 +62,7 @@ function initialize() {
     }else{
       move(document.querySelector('#live .stage'),visuals);
       move($('sourceBadge'),top);top.insertBefore($('sourceBadge'),menu);
-      move(document.querySelector('#live .metrics'),details);
-      const phase=el('div','app-phase');move(document.querySelector('label[for="phase"]'),phase);move($('phase'),phase);details.append(phase);
-      move($('trackingHealth'),status);move($('status'),status);move($('recordIndicator'),details);
+      move($('trackingHealth'),status);move($('status'),status);move($('recordIndicator'),status);
       move($('cameraStart'),cameraGroup);move($('stop'),cameraGroup);move($('recordStart'),recordGroup);move($('recordStop'),recordGroup);actions.append(cameraGroup,recordGroup,clipShortcut);
       move($('recordings'),panes.Clips);move($('assessment'),panes.Review);move(document.querySelector('.exports'),panes.Clips);
       // The remaining camera instructions, trace and evidence remain available.
@@ -79,7 +77,7 @@ function initialize() {
     for(const [node,marker] of [...homes].reverse()){marker.replaceWith(node);}homes.clear();
     blank.remove();if(simulator)$('cameraStatus').hidden=false;for(const node of original)node.classList.remove('desktop-content');
     for(const id of ['cameraStart','cameraStop','stop','recordStart','recordStop'])if($(id))$(id).classList.remove('app-superseded');
-    shell.hidden=true;document.body.classList.remove('app-mode');details.querySelector('.app-phase')?.remove();window.dispatchEvent(new Event('resize'));
+    shell.hidden=true;document.body.classList.remove('app-mode');window.dispatchEvent(new Event('resize'));
     for(const v of document.querySelectorAll('video'))if(v.srcObject&&v.paused)v.play().catch(()=>{});
   }
   function pair(start,stop){const playing=$(start).disabled;$(start).classList.toggle('app-superseded',playing);$(stop).classList.toggle('app-superseded',!playing);}

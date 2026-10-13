@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Gaze Lab · Eye Tracking & NIHSS</title><link rel="icon" href="data:,"><link rel="stylesheet" href="./style.css?v=clean10"><link rel="stylesheet" href="./mobile.css"><meta name="description" content="Eye Tracking & NIHSS Gaze — browser-based research app by Honghao Zhao."><link rel="stylesheet" href="./mobile-shell.css?v=clean10"></head>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Gaze Lab · Eye Tracking & NIHSS</title><link rel="icon" href="data:,"><link rel="stylesheet" href="./style.css?v=live11"><link rel="stylesheet" href="./mobile.css"><meta name="description" content="Eye Tracking & NIHSS Gaze — browser-based research app by Honghao Zhao."><link rel="stylesheet" href="./mobile-shell.css?v=live11"></head>
 <body>
 <header><div><span class="eyebrow">HONGHAO ZHAO · RESEARCH PROTOTYPE</span><h1>Eye Tracking & NIHSS Gaze</h1><p>Video → Head-pose correction → Movement evidence → Examiner review</p></div><a href="./guide.html">Guide ↗</a></header>
 <nav class="mobile-nav" aria-label="Quick navigation"><a href="#settings">Input</a><a href="#live">Live view</a><a href="#recordings">Clip</a><a href="#assessment">Review</a></nav><main>
@@ -35,14 +35,10 @@
 <div class="measurements">
   <div class="card camera-card" id="live">
     <div class="card-heading"><h2>Live view</h2><span id="sourceBadge" class="badge">No input</span></div>
-    <div class="stage"><video id="video" playsinline muted controls hidden></video><canvas id="overlay" width="1280" height="720"></canvas><div id="empty">Start the camera, import a video,<br>or try a synthetic demo</div></div>
-  <label for="phase">Live exam phase</label>
-  <select id="phase"><option value="unlabelled">Unlabelled / preparation</option><option value="center">Center / rest</option><option value="left">Look to subject-left</option><option value="right">Look to subject-right</option><option value="reflex">Clinical reflex exam (record only)</option></select>
-  <p class="hint">The examiner presents adequate left/right targets and marks phases. Phone screen edges do not cover the full gaze range. Reflex examination requires qualified clinical staff.</p>
+    <div class="stage"><video id="video" playsinline muted controls hidden></video><canvas id="overlay" width="1280" height="720"></canvas><div id="empty">Camera off</div></div>
     <p id="trackingHealth" class="hint" hidden>Waiting for eye tracking…</p>
-    <p id="status" role="status" aria-live="polite">The local model loads when needed.</p>
-    <div class="record-bar"><div class="buttons"><button id="recordStart" disabled>● Start recording</button><button id="recordStop" disabled>Stop recording</button></div><span id="recordIndicator" role="status">Start the camera to record movement and eye positions.</span></div>
-    <p class="hint">Records raw video and an analysis video with eye measurements. Camera only, no audio. Replay and download below.</p>
+    <p id="status" role="status" aria-live="polite" hidden></p>
+    <div class="record-bar"><div class="buttons"><button id="recordStart" disabled>● Start recording</button><button id="recordStop" disabled>Stop recording</button></div><span id="recordIndicator" role="status" hidden></span></div>
     <div class="metrics">
       <div><span>Left eye</span><b id="leftValue">—</b><small id="leftQuality" class="eye-quality">Waiting</small></div>
       <div><span>Right eye</span><b id="rightValue">—</b><small id="rightQuality" class="eye-quality">Waiting</small></div>
@@ -76,4 +72,4 @@
 </section>
 <section class="card exports"><div><h2>Export full session</h2><p class="hint">Export measurements and decisions for the full session here. Use the clip buttons above for individual recordings and their data.</p></div><div class="buttons"><button id="exportJson" disabled>Export JSON</button><button id="exportCsv" disabled>Export CSV</button><a class="button" href="./guide.html">Methods & instructions ↗</a></div></section>
 <footer>Gaze Lab v0.2.1 · Planar pose correction · Independent eyes · No initial-gaze zeroing · Local processing</footer>
-</main><script type="module" src="./app.js?v=clean10"></script><script type="module" src="./english-ui.js"></script><script type="module" src="./mobile-shell.js?v=clean10"></script></body></html>
+</main><script type="module" src="./app.js?v=live11"></script><script type="module" src="./english-ui.js"></script><script type="module" src="./mobile-shell.js?v=live11"></script></body></html>

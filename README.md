@@ -8,7 +8,7 @@ Python, a local server, a GitHub account, or an app installation.
 
 On phones, the app opens directly into a single-screen live workspace. Use **Tools** to open the side panel. Primary controls stay on the main screen. Opening tools does not stop the camera or a recording. Rotate the phone to use the landscape layout.
 
-Video, independent eye measurements, head pose, phase selection and recording controls remain visible. **Setup** contains camera/import/format options; **Clips** contains replay and downloads; **Review** contains the evidence and examiner form.
+The live11 screen keeps the video and primary buttons visible, with a short timer during recording and messages only when attention is needed. Eye and head values are collapsed under **Tools → Review → Tracking details**. Live recordings are unlabelled; add phase intervals afterwards in **Eye motion → Exam details**. **Setup** contains camera/import/format options; **Clips** contains replay and downloads; **Review** contains the evidence and examiner form.
 
 ## Mobile clip review and eye-only motion (mobile9)
 
@@ -40,7 +40,7 @@ The front-camera preview is flipped horizontally by default. **Tools → Setup �
 
 ## Continuous camera tracking
 
-The live3 update adds a 250 ms watchdog for video-frame callbacks and a capped timer fallback. A repeating `mediaTime` no longer blocks analysis. Frames pass through an oriented canvas before worker transfer; bitmap creation has a deadline. Only one inference runs at a time. The live status shows update count and recent update rate. Results older than 1.5 seconds are cleared with a tracking-delay message.
+The live3 update adds a 250 ms watchdog for video-frame callbacks and a capped timer fallback. A repeating `mediaTime` no longer blocks analysis. Frames pass through an oriented canvas before worker transfer; bitmap creation has a deadline. Only one inference runs at a time. Routine update counters are hidden from the live screen. Results older than 1.5 seconds are cleared with a tracking-delay message.
 
 Local exports identify the build, browser and per-frame scheduling path. These are browser capture timestamps, not sensor exposure timestamps; timer sampling may repeat a source frame. Synthetic callback-stall tests passed, but physical iPhone Safari verification is still needed.
 

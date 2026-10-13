@@ -33,8 +33,7 @@ export function simplifyUI(){
     fold('Synthetic demo',demoNodes);
     const ms=document.querySelector('.measurements');
     fold('Traces & movement evidence',[...ms.children].filter(n=>n.id!=='live'));
-    const phaseHint=$('phase').nextElementSibling;if(phaseHint?.classList.contains('hint'))phaseHint.hidden=true;
-    const recordHint=document.querySelector('.record-bar')?.nextElementSibling;if(recordHint?.classList.contains('hint'))recordHint.hidden=true;
+    fold('Tracking details',[document.querySelector('#live .metrics')],ms);
     $('formatHint').textContent='Original downloads need no conversion. Available formats depend on this browser.';
     $('recordStop').textContent='Finish clip';
     document.querySelector('#recordings > .hint').textContent='Clips stay on this device. Download before closing or refreshing.';
