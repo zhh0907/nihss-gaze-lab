@@ -1,7 +1,8 @@
+import {eyeUsable} from './eye-quality.js';
 // Head-relative iris position, not an estimate of visual-axis angle.
 // MediaPipe uses a column-major face transform in a camera frame with +Y up,
 // looking along -Z. See README.md for the planar-eye approximation.
-export const VERSION = 'gaze-prototype-0.2.0';
+export const VERSION = 'gaze-prototype-0.2.1';
 export const DEFAULTS = Object.freeze({
   verticalFov: 63, maxYaw: 35, maxPitch: 25, maxRoll: 35,
   minEyePixels: 24, minLidRatio: 0.12, maxBlink: 0.6,
@@ -81,7 +82,7 @@ export function measureFrame(result,width,height,config=DEFAULTS) {
     if (eye.widthPixels<cfg.minEyePixels) reasons.push('eye-too-small');
     if (lid<cfg.minLidRatio || blends[ids.blink]>cfg.maxBlink) reasons.push('blink-or-occlusion');
     if (Math.abs(eye.corrected)>1.2) reasons.push('iris-outside-eye');
-    out[side]={...eye,lidRatio:lid,blink:blends[ids.blink]??null,valid:reasons.length===0 && out.reasons.length===0,reasons,points:pts};
+    out[side]={...eye,lidRatio:lid,blink:blends[ids.blink]??null,qualityChecks:{lidTooNarrow:lid<cfg.minLidRatio,blinkScoreHigh:blends[ids.blink]>cfg.maxBlink},valid:reasons.length===0 && out.reasons.length===0,reasons,points:pts};
   }
   out.valid=out.reasons.length===0 && out.left?.valid===true && out.right?.valid===true;
   return out;
@@ -94,16 +95,19 @@ export function percentile(values,q) {
   return a[lo]+(a[hi]-a[lo])*(p-lo);
 }
 
-// No interpolation across invalid frames. Keep unsmoothed values for research.
+// Filter each eye independently; never interpolate through that eye's missing data.
 export class DisplayFilter {
   constructor(tau=.065) {this.tau=tau;this.reset();}
-  reset(){this.last=null;}
+  reset(){this.last=[null,null];}
   step(frame,t){
-    if (!frame.valid) {this.reset();return null;}
-    const values=[frame.left.corrected,frame.right.corrected];
-    const dt=this.last?t-this.last.t:Infinity;
-    const alpha=dt>0 && dt<.25?1-Math.exp(-dt/this.tau):1;
-    const value=values.map((v,i)=>this.last?this.last.value[i]+alpha*(v-this.last.value[i]):v);
-    this.last={t,value};return value;
+    const values=['left','right'].map((side,i)=>{
+      if(!eyeUsable(frame,side)){this.last[i]=null;return null;}
+      const previous=this.last[i],dt=previous?t-previous.t:Infinity;
+      const alpha=dt>0 && dt<.25?1-Math.exp(-dt/this.tau):1;
+      const current=frame[side].corrected;
+      const value=previous?previous.value+alpha*(current-previous.value):current;
+      this.last[i]={t,value};return value;
+    });
+    return values.some(Number.isFinite)?values:null;
   }
 }

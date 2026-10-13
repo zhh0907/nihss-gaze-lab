@@ -10,6 +10,10 @@ On phones, the app opens directly into a single-screen live workspace. Use **Too
 
 Video, independent eye measurements, head pose, phase selection and recording controls remain visible. **Setup** contains camera/import/format options; **Clips** contains replay and downloads; **Review** contains the evidence and examiner form.
 
+## Unavailable eye positions
+
+The quality5 update removes rejected iris dots from both preview and annotated recordings. A dashed eye guide labelled L ? / R ? and a per-eye reason replace misleading positions. Each valid eye keeps its own live value and trace; the other eye's loss does not reset it. Missing values are never zero-filled, held as valid, or interpolated across gaps. Bilateral examination coverage is still required. JSON includes which eyelid/blink check failed. Detector thresholds and NIHSS mapping are unchanged; this fixes presentation, not extreme-gaze detection accuracy.
+
 ## Preview orientation
 
 The front-camera preview is flipped horizontally by default. **Tools → Setup → Flip front-camera preview** changes the display while tracking. Markers follow the image with upright L/R labels. Analysis coordinates, saved clips, imported videos and rear-camera orientation are unaffected. The separate input-unmirror setting corrects source pixels before analysis.

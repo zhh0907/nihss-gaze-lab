@@ -1,7 +1,8 @@
-import {DEFAULTS,VERSION,measureFrame,DisplayFilter} from './geometry.js';
+import {eyeUsable,eyeQualityLabel} from './eye-quality.js';
+import {DEFAULTS,VERSION,measureFrame,DisplayFilter} from './geometry.js?v=quality5';
 import {parseIntervals,phaseAt,summarize,scoreNIHSS} from './assessment.js';
 import {demoInput} from './fixtures.js';
-import {GazeRecorder,drawEyeMarkers,extensionFor,recordingCsv,recordingMime} from './recording.js?v=preview4';
+import {GazeRecorder,drawEyeMarkers,extensionFor,recordingCsv,recordingMime} from './recording.js?v=quality5';
 import {convertVideo} from './video-export.js?v=mobile2';
 import {startLiveLoop} from './live-loop.js?v=live3';
 import {captureVideoFrame,bitmapWithDeadline} from './frame-capture.js?v=live3';
@@ -45,6 +46,7 @@ function trackingHealth(){
     $('trackingHealth').textContent=`Tracking delayed · no update for ${(age/1000).toFixed(1)} s`;
     $('trackingHealth').classList.add('warning');
     $('leftValue').textContent=$('rightValue').textContent=$('headValue').textContent='—';
+    for(const side of ['left','right']){$(side+'Quality').textContent='Tracking delayed';$(side+'Quality').classList.add('warning');}
     filter.reset();overlay.getContext('2d').clearRect(0,0,overlay.width,overlay.height);
   }else{
     $('trackingHealth').textContent=lastTrackingUpdate?`Tracking · ${samples.length} updates · ${recentUpdates.length} / s`:'Waiting for the first eye-tracking result…';
@@ -67,6 +69,7 @@ function clearMeasurements(){
   $('trackingHealth').hidden=source!=='camera';$('trackingHealth').textContent='Waiting for eye tracking…';$('trackingHealth').classList.remove('warning');
   $('exportJson').disabled=true;$('exportCsv').disabled=true;
   $('leftValue').textContent=$('rightValue').textContent=$('headValue').textContent='—';
+  for(const side of ['left','right']){$(side+'Quality').textContent='Waiting';$(side+'Quality').classList.remove('warning');}
   $('coverageValue').textContent='0 / 0';$('progress').value=0;updateSummary();drawTrace();
 }
 function disposeWorker(){
@@ -146,6 +149,7 @@ function accept(result,t,phase,phaseStartValue,inferenceMs=null,truth=null){
   samples.push(sample);const smoothed=filter.step(measured,t);
   if(source==='camera'){lastTrackingUpdate=performance.now();recentUpdates.push(lastTrackingUpdate);trackingHealth();}
   $('leftValue').textContent=smoothed?fmt(smoothed[0]):'—';$('rightValue').textContent=smoothed?fmt(smoothed[1]):'—';
+  for(const side of ['left','right']){$(side+'Quality').textContent=eyeQualityLabel(measured,side);$(side+'Quality').classList.toggle('warning',!eyeUsable(measured,side));}
   $('headValue').textContent=measured.head?['yaw','pitch','roll'].map(k=>fmt(measured.head[k],1)+'°').join(' / '):'—';
   drawOverlay(sample,width,height);
   if(frameNo++%5===0){updateSummary();drawTrace();}
@@ -179,7 +183,7 @@ function drawTrace(){
   const visible=samples.filter(s=>s.t>=start);
   for(const [side,color] of [['left','#61dcc3'],['right','#80baff']])for(const field of ['raw','corrected']){
     ctx.strokeStyle=color;ctx.lineWidth=field==='raw'?1:2;ctx.globalAlpha=field==='raw'?.45:1;ctx.setLineDash(field==='raw'?[4,4]:[]);ctx.beginPath();let previous=null;
-    for(const s of visible){const v=s[side]?.[field];if(!s.valid||!Number.isFinite(v)){previous=null;continue;}const px=x(s.t),py=y(v);if(previous && s.t-previous.t<=config.maxSampleGap)ctx.lineTo(px,py);else ctx.moveTo(px,py);previous=s;}ctx.stroke();
+    for(const s of visible){const v=s[side]?.[field];if(!eyeUsable(s,side)||!Number.isFinite(v)){previous=null;continue;}const px=x(s.t),py=y(v);if(previous && s.t-previous.t<=config.maxSampleGap)ctx.lineTo(px,py);else ctx.moveTo(px,py);previous=s;}ctx.stroke();
   }
   ctx.globalAlpha=1;ctx.setLineDash([]);
 }
@@ -226,7 +230,7 @@ $('cameraStart').onclick=async()=>{
     applyPreviewOrientation();
     await video.play();if(token!==generation)return;
     sourceInfo.settings={width:video.videoWidth,height:video.videoHeight,frameRate:stream.getVideoTracks()[0].getSettings().frameRate};
-    sourceInfo.runtime={build:'preview4',browser:navigator.userAgent,frameInput:'canvas-oriented-bitmap'};
+    sourceInfo.runtime={build:'quality5',browser:navigator.userAgent,frameInput:'canvas-oriented-bitmap'};
     stream.getVideoTracks()[0].onended=()=>{stop();status('Camera disconnected. Collected data can still be exported.');};
     await initWorker(token);if(token!==generation)return;
     startTime=performance.now();phaseStart=0;cameraReady=true;refreshRecordingControls();

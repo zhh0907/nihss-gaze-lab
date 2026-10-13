@@ -1,3 +1,4 @@
+import {eyeUsable,eyeQualityLabel} from './eye-quality.js';
 // All media stays in memory until the user downloads it. Detection frames are
 // copied BEFORE transfer to the worker; overlays never use a newer camera frame.
 export const RECORDING_SCHEMA='gaze-recording-1';
@@ -16,12 +17,19 @@ export function drawEyeMarkers(ctx,sample,width,height,{flipX=false}={}) {
     const eye=sample?.[side];if(!eye?.points)continue;
     const pts=eye.points,good=p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y);
     if(!good(pts.a)||!good(pts.b))continue;
-    ctx.strokeStyle=eye.valid?color:'#f2bb70';ctx.fillStyle=ctx.strokeStyle;ctx.lineWidth=2*scale;
+    const usable=eyeUsable(sample,side),label=side==='left'?'L':'R';
+    ctx.save();ctx.strokeStyle=usable?color:'#f2bb70';ctx.fillStyle=ctx.strokeStyle;ctx.lineWidth=2*scale;
+    ctx.setLineDash(usable?[]:[5*scale,4*scale]);
     ctx.beginPath();ctx.moveTo(x(pts.a),pts.a.y*height);ctx.lineTo(x(pts.b),pts.b.y*height);ctx.stroke();
-    for(const key of ['a','b','iris','top','bottom']){const p=pts[key];if(!good(p))continue;ctx.beginPath();ctx.arc(x(p),p.y*height,key==='iris'?4*scale:2*scale,0,Math.PI*2);ctx.fill();}
-    if(good(pts.iris)&&good(pts.top)){
-      ctx.font=`${13*scale}px Segoe UI`;ctx.fillText(side==='left'?'L':'R',x(pts.iris),pts.top.y*height-10*scale);
+    ctx.font=`${13*scale}px Segoe UI`;
+    if(!usable){
+      // Rejected iris landmarks can sit near the center. Do not draw them as an eye position.
+      ctx.textAlign='center';ctx.fillText(`${label} ?`,(x(pts.a)+x(pts.b))/2,Math.min(pts.a.y,pts.b.y)*height-10*scale);
+      ctx.restore();continue;
     }
+    for(const key of ['a','b','iris','top','bottom']){const p=pts[key];if(!good(p))continue;ctx.beginPath();ctx.arc(x(p),p.y*height,key==='iris'?4*scale:2*scale,0,Math.PI*2);ctx.fill();}
+    if(good(pts.iris)&&good(pts.top))ctx.fillText(label,x(pts.iris),pts.top.y*height-10*scale);
+    ctx.restore();
   }
 }
 
@@ -123,14 +131,14 @@ export class GazeRecorder {
     ctx.fillStyle='#cee6ec';
     ctx.fillText(`GAZE LAB · ${time.toFixed(2)}s · ${phases[sample?.phase??item.phase]??'Unlabelled'}`,16,y+28,width-32);
     ctx.fillStyle=sample?.valid?'#77e0bf':'#ffcc7d';
-    ctx.fillText(sample?`${sample.valid?'Both eyes valid':'Invalid / not detected'} · sample ${sample.recordingTimeSeconds.toFixed(3)}s`:'Waiting for this clip to be analyzed',16,y+56,width-32);
-    // Invalid values remain available in JSON as rejected estimates, never as
-    // valid-looking measurements in the annotated video.
-    ctx.fillStyle='#61dcc3';ctx.fillText(`Left L: ${sample?.left?.valid?fmt(sample.left.corrected):'—'}`,16,y+86);
-    ctx.fillStyle='#80baff';ctx.fillText(`Right R: ${sample?.right?.valid?fmt(sample.right.corrected):'—'}`,Math.max(175,width*.28),y+86);
-    ctx.fillStyle='#a5bacc';
-    const head=sample?.head;
-    ctx.fillText(`Head Y/P/R: ${head?[head.yaw,head.pitch,head.roll].map(n=>fmt(n,1)+'°').join(' / '):'—'}  ·  normalized eye positions`,16,y+117,width-32);
+    const quality=sample?`L: ${eyeQualityLabel(sample,'left')} · R: ${eyeQualityLabel(sample,'right')}`:'Waiting for this clip to be analyzed';
+    ctx.fillText(quality,16,y+52,width-32);
+    // Rejected estimates remain in JSON for troubleshooting, never as valid-looking video positions.
+    ctx.fillStyle='#61dcc3';ctx.fillText(`Left L: ${eyeUsable(sample,'left')?fmt(sample.left.corrected):'—'}`,16,y+78);
+    ctx.fillStyle='#80baff';ctx.fillText(`Right R: ${eyeUsable(sample,'right')?fmt(sample.right.corrected):'—'}`,Math.max(175,width*.28),y+78);
+    ctx.fillStyle='#a5bacc';const head=sample?.head;
+    ctx.fillText(`Head Y/P/R: ${head?[head.yaw,head.pitch,head.roll].map(n=>fmt(n,1)+'°').join(' / '):'—'}`,16,y+104,width-32);
+    ctx.fillText(sample?`Sample ${sample.recordingTimeSeconds.toFixed(3)}s · ? / — = unavailable, not center`:'? / — = unavailable, not center',16,y+130,width-32);
   }
 
   markPhase(phase,sessionTime){
