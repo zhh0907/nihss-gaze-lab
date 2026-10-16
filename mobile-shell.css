@@ -169,3 +169,9 @@ body.app-mode .drawer-content{padding:8px 10px 20px}
 .position-buttons strong{font-size:13px}.position-buttons small{font-size:11px;font-variant-numeric:tabular-nums}
 .position-buttons button[aria-pressed=true]{background:#235348;border-color:#72bfa6}
 .position-values{width:100%;font-size:12px}.position-values th,.position-values td{padding:5px;text-align:left}
+.gaze-methods{margin:8px 0}.gaze-methods>label{display:flex;align-items:center;gap:8px;font-size:12px}
+.gaze-methods>label>select{flex:1;min-width:0;width:auto;min-height:44px}
+.temporal-holds[hidden]{display:none}.temporal-holds .hint{font-size:12px;line-height:1.4;margin:6px 0}
+.hold-row{display:grid;grid-template-columns:42px 1fr 1fr;align-items:center;gap:6px;margin:6px 0}
+.hold-row>strong{font-size:12px}.hold-row>button{display:flex;justify-content:space-between;align-items:center;gap:4px;min-width:0;min-height:44px;padding:6px;font-size:12px}
+.hold-row small{font-size:11px;font-variant-numeric:tabular-nums}.hold-row button[aria-pressed=true]{background:#235348;border-color:#72bfa6}

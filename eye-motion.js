@@ -2,6 +2,7 @@ import {selectedFrame,sampleAtTime} from './segment-review.js?v=closed12';
 import {summarize,scoreNIHSS,phaseAt,NIHSS_SOURCE} from './assessment.js';
 import {eyeUsable} from './eye-quality.js';
 import {threePositionEvidence} from './three-position.js?v=three13';
+import {temporalGazeEvidence} from './temporal-gaze.js?v=temporal14';
 
 export const EYE_VIDEO_SIZE=Object.freeze({width:960,height:300});
 
@@ -54,9 +55,17 @@ export function clipGazeSuggestion(clip,report){
     pending,estimated,source:NIHSS_SOURCE,mode:'experimental-movement-suggestion',
     limitation:'Normalized iris positions are not clinical gaze angles. Research thresholds are not NIHSS cutoffs.'};
   if(pending){result.reasons.push(`Choose a result for ${pending} remaining segment${pending===1?'':'s'} first.`);return result;}
+  const originalSamples=reviewedSamples(clip,report,'original');
+  result.methods={
+    threePosition:{selected:threePositionEvidence(samples,clip.threePositionSelection??{},checked),
+      original:threePositionEvidence(originalSamples,clip.threePositionSelection??{},checked)},
+    temporal:{selected:temporalGazeEvidence(samples,clip.temporalSelection??{},checked,clip.data.recording.durationSeconds),
+      original:temporalGazeEvidence(originalSamples,clip.temporalSelection??{},checked,clip.data.recording.durationSeconds)},
+  };
   if(clip.gazeScoringMode==='three-position'){
-    result.threePositions=threePositionEvidence(samples,clip.threePositionSelection??{},checked);
-    result.originalThreePositions=threePositionEvidence(reviewedSamples(clip,report,'original'),clip.threePositionSelection??{},checked);
+    result.threePositions=result.methods.threePosition.selected;result.originalThreePositions=result.methods.threePosition.original;
+  }else if(clip.gazeScoringMode==='temporal'){
+    result.temporal=result.methods.temporal.selected;result.originalTemporal=result.methods.temporal.original;
   }
   const clinical=clip.clinicalObservation;
   if(clinical?.finding&&clinical.finding!=='unknown'){
@@ -71,6 +80,19 @@ export function clipGazeSuggestion(clip,report){
     if(clinical.finding==='normal'&&evidence.flags.length)result.reasons.push('Video movement flags conflict with the normal finding. Recheck the clip and examination.');
     if(clinical.finding==='normal'&&result.threePositions?.adequate&&result.threePositions.legacyRuleScore!==0)
       result.reasons.push('The three-position rule flags a different pattern from the normal examiner finding. Recheck the selected positions.');
+    if(clinical.finding==='normal'&&result.temporal?.adequate&&result.temporal.flags.length)
+      result.reasons.push('The temporal assessment flags a different pattern from the normal examiner finding. Recheck the labelled holds.');
+    return result;
+  }
+  if(result.temporal){
+    const p=result.temporal;result.mode=p.version;result.candidates=p.candidates;result.candidateScore=p.candidateScore;
+    result.title=!p.adequate?'NIHSS · Insufficient evidence':p.candidateScore===null?'NIHSS · Review 1–2':`NIHSS · Possible ${p.candidateScore}`;
+    result.reasons=[...p.issues,...p.reasons];
+    if(p.adequate&&(result.originalTemporal.adequate!==p.adequate||JSON.stringify(result.originalTemporal.flags)!==JSON.stringify(p.flags)))
+      result.reasons.push('Accepted replacements changed the temporal evidence. Compare the original tracking.');
+    const estimatedSeconds=Object.values(p.phases).reduce((n,f)=>n+['left','right'].reduce((m,s)=>m+(f[s]?.estimatedSeconds??0),0),0);
+    if(estimatedSeconds)result.reasons.push(`${estimatedSeconds.toFixed(2)} eye-seconds include accepted estimates; these are not independent observations.`);
+    result.limitation='Experimental time-weighted hold assessment. Position and duration thresholds need clinical validation. Resting offset is preserved. No learned model or RL update is involved.';
     return result;
   }
   if(result.threePositions){
