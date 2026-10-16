@@ -19,7 +19,7 @@ Browser-based research tools for binocular tracking, video review, and examiner-
 1. Open the live demo. Camera access requires HTTPS or localhost.
 2. Choose camera/import settings under **Tools → Setup**, then start capture.
 3. Record a clip; use **Clips** for playback and downloads.
-4. Review per-eye segments under **Eye motion** and add actual exam-phase intervals after recording.
+4. Confirm per-eye segments in **Review**. In **Eye motion** or **Video**, pause and tap **Rest**, **Left**, and **Right** at the corresponding positions to obtain a temporary gaze suggestion.
 5. Download recordings and JSON/CSV before refreshing or closing the page.
 
 For local use, serve this repository with `python -m http.server 8000` and open `http://localhost:8000/`. Preserve `vendor/` and the bundled models. No npm build, API key, or application backend is required.
@@ -30,11 +30,13 @@ Original recordings are preserved. Suspicious segments show original and propose
 
 Eye-only playback shows normalized horizontal, head-relative iris position, not calibrated 3D eye rotation. MP4/WebM availability depends on the browser. Conversion may alter frame timing; use original recordings and timestamps for frame-sensitive analysis.
 
+The temporary [three-position method](THREE_POSITION.md) adapts the earlier end-position tool, using reviewed, head-relative measurements and short stable windows. It suggests **Possible 0**, **Possible 1**, or **Review 1–2**, with reasons. The previous labelled-phase method remains under **Exam details → Scoring method**. The JSON export preserves selected times and original/reviewed evidence.
+
 ## Privacy and limitations
 
 - Camera video and analysis stay in the browser; no LLM or video-upload service is used.
 - Tracking compensation and segment-repair thresholds are experimental. Uncalibrated eye positions are not angles.
-- Gaze suggestions require adequate labeled phases and examiner review; they cannot exclude subtle palsy.
+- Gaze suggestions require usable selected positions (or labelled phases) and examiner review; they cannot exclude subtle palsy. The inherited position thresholds are unvalidated; three positions alone cannot establish score 2.
 - Clinical rule mapping depends on examiner observations, including applicable reflex findings.
 - Mobile-emulation checks do not establish physical iPhone/Android or Safari performance.
 

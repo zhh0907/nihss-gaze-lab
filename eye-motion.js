@@ -1,6 +1,7 @@
 import {selectedFrame,sampleAtTime} from './segment-review.js?v=closed12';
 import {summarize,scoreNIHSS,phaseAt,NIHSS_SOURCE} from './assessment.js';
 import {eyeUsable} from './eye-quality.js';
+import {threePositionEvidence} from './three-position.js?v=three13';
 
 export const EYE_VIDEO_SIZE=Object.freeze({width:960,height:300});
 
@@ -53,6 +54,10 @@ export function clipGazeSuggestion(clip,report){
     pending,estimated,source:NIHSS_SOURCE,mode:'experimental-movement-suggestion',
     limitation:'Normalized iris positions are not clinical gaze angles. Research thresholds are not NIHSS cutoffs.'};
   if(pending){result.reasons.push(`Choose a result for ${pending} remaining segment${pending===1?'':'s'} first.`);return result;}
+  if(clip.gazeScoringMode==='three-position'){
+    result.threePositions=threePositionEvidence(samples,clip.threePositionSelection??{},checked);
+    result.originalThreePositions=threePositionEvidence(reviewedSamples(clip,report,'original'),clip.threePositionSelection??{},checked);
+  }
   const clinical=clip.clinicalObservation;
   if(clinical?.finding&&clinical.finding!=='unknown'){
     // This maps the examiner's independent examination, not an inference that
@@ -64,6 +69,18 @@ export function clipGazeSuggestion(clip,report){
     result.reasons=[...mapped.basis,...mapped.missing];
     if(!evidence.adequate)result.reasons.push('The video cannot independently support this score; it maps the entered examination findings.');
     if(clinical.finding==='normal'&&evidence.flags.length)result.reasons.push('Video movement flags conflict with the normal finding. Recheck the clip and examination.');
+    if(clinical.finding==='normal'&&result.threePositions?.adequate&&result.threePositions.legacyRuleScore!==0)
+      result.reasons.push('The three-position rule flags a different pattern from the normal examiner finding. Recheck the selected positions.');
+    return result;
+  }
+  if(result.threePositions){
+    const p=result.threePositions;result.mode='three-position-legacy-rules-v1';
+    result.candidates=p.candidates;result.candidateScore=p.candidateScore;
+    result.title=!p.adequate?'NIHSS · Select three positions':p.candidateScore===null?'NIHSS · Review 1–2':`NIHSS · Possible ${p.candidateScore}`;
+    result.reasons=[...p.issues,...p.reasons];
+    if(p.adequate&&(result.originalThreePositions.adequate!==p.adequate||result.originalThreePositions.legacyRuleScore!==p.legacyRuleScore))
+      result.reasons.push('Accepted replacements changed the three-position result. Compare with the original tracking.');
+    result.limitation='Temporary rule from the earlier three-position tool. Thresholds 0.15 / 0.40 are not clinically validated. No patient-specific recentering is applied.';
     return result;
   }
   if(!evidence.adequate){
@@ -135,5 +152,6 @@ export function createEyeMotionPlayer({clip,report}){
   function loop(now){time=Math.min(Number(seek.max),(now-start)/1000);draw();if(time>=Number(seek.max)){pause();return;}raf=requestAnimationFrame(loop);}
   play.onclick=()=>{if(playing){pause();return;}if(time>=Number(seek.max))time=0;playing=true;start=performance.now()-time*1000;play.textContent='Pause';play.setAttribute('aria-label','Pause eye motion');raf=requestAnimationFrame(loop);};
   seek.oninput=()=>{pause();time=Number(seek.value);draw();};draw();
-  return {element:root,pause,refresh(){render=makeEyeMotionRenderer(clip,report);draw();},dispose:pause};
+  return {element:root,pause,getTime:()=>time,seekTime(t){pause();time=Math.max(0,Math.min(Number(seek.max),t));draw();},
+    refresh(){render=makeEyeMotionRenderer(clip,report);draw();},dispose:pause};
 }

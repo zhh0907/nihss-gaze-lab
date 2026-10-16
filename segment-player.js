@@ -85,7 +85,7 @@ export function makeReviewRenderer(clip,report,version='selected'){
       const kind=s?.reviewKinds[side],label=kind==='closed'?'Eye closed':kind==='blink'?'Blink · skipped':kind==='unresolved'?'Unresolved':value(s?.[side]);
       ctx.fillStyle=kind==='estimated'?'#e4a0ff':'#cee6ec';ctx.fillText((side==='left'?'Left':'Right')+': '+(kind==='estimated'?'~ ':'')+label,16,53+j*25,w-32);
     }
-    ctx.fillStyle='#a5bacc';ctx.fillText('Purple = accepted estimate · NIHSS unchanged',16,104,w-32);
+    ctx.fillStyle='#a5bacc';ctx.fillText('Purple = accepted estimate · Research use',16,104,w-32);
     ctx.fillText('Raw-video alignment is approximate',16,130,w-32);
   };
 }
@@ -100,7 +100,7 @@ export function createReviewedPlayer({clip,report,clipNumber}){
   const seek=el('input');seek.type='range';seek.min=0;seek.max=clip.data.recording.durationSeconds;seek.step=.01;seek.value=0;seek.setAttribute('aria-label','Full video time');
   const status=el('p',null,'hint');status.setAttribute('role','status');
   root.append(select,canvas,video,controls,seek,status);
-  let render=makeReviewRenderer(clip,report,'original'),raf=null,disposed=false;
+  let render=makeReviewRenderer(clip,report,'original'),raf=null,disposed=false,pendingSeek=null;
   const draw=()=>{if(disposed)return;render(canvas.getContext('2d'),video,video.currentTime);seek.value=video.currentTime;};
   function loop(){draw();if(!video.paused&&!video.ended&&!disposed)raf=requestAnimationFrame(loop);}
   function pause(){video.pause();cancelAnimationFrame(raf);play.textContent='Play';play.setAttribute('aria-label','Play full video');}
@@ -108,8 +108,9 @@ export function createReviewedPlayer({clip,report,clipNumber}){
   select.onchange=()=>{render=makeReviewRenderer(clip,report,select.value);draw();};
   seek.oninput=()=>{pause();video.currentTime=Number(seek.value);};
   video.onloadeddata=draw;video.onseeked=draw;video.onended=()=>{pause();draw();};
-  video.onloadedmetadata=()=>{if(Number.isFinite(video.duration))seek.max=video.duration;};
+  video.onloadedmetadata=()=>{if(Number.isFinite(video.duration))seek.max=video.duration;if(pendingSeek!==null){video.currentTime=pendingSeek;pendingSeek=null;}};
   video.onerror=()=>{status.textContent='This browser could not decode the recording.';};video.src=clip.rawUrl;
-  draw();return {element:root,pause,refresh(){select.value='selected';render=makeReviewRenderer(clip,report,'selected');draw();},
+  draw();return {element:root,pause,getTime:()=>pendingSeek??video.currentTime,seekTime(t){pause();const time=Math.max(0,Math.min(Number(seek.max),t));seek.value=time;if(video.readyState)video.currentTime=time;else pendingSeek=time;},
+    refresh(){select.value='selected';render=makeReviewRenderer(clip,report,'selected');draw();},
     dispose(){disposed=true;pause();video.removeAttribute('src');video.load();}};
 }

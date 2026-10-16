@@ -1,0 +1,12 @@
+# Temporary three-position rule
+
+The default clip suggestion adapts `code()` / `scoreGaze()` from Honghao's earlier local `NIHSS/index.html`. Finish segment review, pause the video or eye-only timeline at the initial resting position, and tap **Rest**. Do the same for the subject's full **Left** and **Right** gaze. Tapping an already marked button replaces its time. Switching between Video and Eye motion carries the playback time across. **Exam details → Clear three positions** resets the selection; **Scoring method** can switch back to labelled-phase evidence.
+
+The rule uses each eye independently, with current head-relative corrected measurements and a canonical sign: negative codes mean subject-left. It keeps the original 0.15 and 0.40 boundaries in units of half eye width. Resting offset is preserved, never subtracted as a patient-specific zero. These thresholds have not been clinically calibrated on either system. The original local page is unchanged.
+
+Each selection uses the median of adjacent checked, usable frames within ±0.25 seconds (at least 3 frames spanning 0.1 seconds). The selected instant must itself have usable eyes within 0.12 seconds. Closed, blinking, unresolved, unchecked or head-rejected samples break the window; missing measurements never count as central gaze. Overlapping selections, unstable positions and windows spanning different position codes abstain. This is a robust window adaptation, not an exact numerical reproduction of the old single-frame implementation.
+
+Centered rest plus full coded excursions suggests **Possible 0**. Other patterns with midline crossing suggest **Possible 1**. The old rule's output of 2 for failure to cross the midline is retained only in exported provenance as `legacyRuleScore`; the UI shows **Review 1–2**, because these three positions cannot establish the required clinical/reflex findings. Definitive rule-mapped scores still require independent examiner entries. Review choices recompute the selected and original three-position evidence; no learned model or RL update is involved. The JSON export includes the three timestamps, window samples, codes, thresholds, original and selected evidence. Nothing is uploaded.
+
+Validation: automated rule/regression tests and Chrome mobile layout/playback tests, including closure, missing data, unilateral restriction, direction signs, unchanged originals and examiner-only 2. Physical iPhone/Safari testing and clinical accuracy validation remain outstanding.
+

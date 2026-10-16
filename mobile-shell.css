@@ -161,3 +161,11 @@ body.app-mode .drawer-content{padding:8px 10px 20px}
 .mobile-app[data-app=gaze] #recordIndicator{display:block;text-align:center;font-size:12px;font-variant-numeric:tabular-nums}
 .mobile-app[data-app=gaze] #recordIndicator.warning{color:#f2c77d}
 .mobile-app[data-app=gaze] #empty{font-size:14px}
+
+.three-positions{margin:8px 0}.three-positions[hidden]{display:none}
+.three-positions .hint{font-size:12px;line-height:1.4;margin:5px 0}
+.position-buttons{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.position-buttons button{min-width:0;min-height:52px;padding:6px;display:grid;gap:3px;text-align:center}
+.position-buttons strong{font-size:13px}.position-buttons small{font-size:11px;font-variant-numeric:tabular-nums}
+.position-buttons button[aria-pressed=true]{background:#235348;border-color:#72bfa6}
+.position-values{width:100%;font-size:12px}.position-values th,.position-values td{padding:5px;text-align:left}
