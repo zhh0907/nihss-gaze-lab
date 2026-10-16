@@ -1,12 +1,12 @@
 import {cameraOrientation} from './camera-orientation.js';
 import {runSelfCheck} from './self-check.js?v=closed12';
-import {createSelfCheckUI} from './self-check-ui.js?v=temporal14';
-import {simplifyUI} from './simplify-ui.js?v=live11';
+import {createSelfCheckUI} from './self-check-ui.js?v=guided15';
+import {simplifyUI} from './simplify-ui.js?v=guided15';
 import {eyeUsable,eyeQualityLabel} from './eye-quality.js';
 import {DEFAULTS,VERSION,measureFrame,DisplayFilter} from './geometry.js?v=quality5';
 import {parseIntervals,phaseAt,summarize,scoreNIHSS} from './assessment.js';
 import {demoInput} from './fixtures.js';
-import {GazeRecorder,drawEyeMarkers,extensionFor,recordingCsv,recordingMime} from './recording.js?v=closed12';
+import {GazeRecorder,drawEyeMarkers,extensionFor,recordingCsv,recordingMime} from './recording.js?v=guided15';
 import {convertVideo} from './video-export.js?v=repair6';
 import {startLiveLoop} from './live-loop.js?v=live3';
 import {captureVideoFrame,bitmapWithDeadline} from './frame-capture.js?v=live3';
@@ -31,11 +31,14 @@ const recording=new GazeRecorder({
   onState:state=>{
     recordStatus(state.state==='recording'?`● ${state.elapsed.toFixed(1)} s`:state.state==='finalizing'?'Saving…':'');
     $('recordIndicator').classList.toggle('recording',state.state==='recording');
+    if(state.state!=='recording')clearGuidePrompt();
     // State callbacks occur inside the recorder's transition.
     queueMicrotask(refreshRecordingControls);
   },
   onClip:clip=>{recordedClips.push(clip);renderRecordings();enqueueSelfCheck(clip);window.dispatchEvent(new Event('clipcreated'));},
   onError:message=>{recordStatus('Recording error: '+message,true);},
+  onPrompt:showGuidePrompt,
+  onGuideEnd:reason=>{stop(reason);if(reason==='guided-interrupted')status('Guide interrupted. Review completed phases or record again.');},
 });
 const reasonNames={'no-face':'No face detected','multiple-faces':'Multiple faces','pose-unavailable':'Head pose unavailable','head-out-of-range':'Head pose outside current limits','eye-unavailable':'Eye landmarks missing','eye-out-of-frame':'Eye outside frame','eye-too-small':'Eye too small in image','blink-or-occlusion':'Blink / occlusion','iris-outside-eye':'Iris location invalid'};
 const phaseNames={center:'Center / rest',left:'Subject looks left',right:'Subject looks right',reflex:'Clinical reflex exam',unlabelled:'Unlabelled'};
@@ -43,6 +46,24 @@ const fmt=(v,n=3)=>Number.isFinite(v)?v.toFixed(n):'—';
 
 function observation(){return {reviewer:$('reviewer').value.trim(),examAdequate:$('examAdequate').value,finding:$('finding').value,overcome:$('overcome').value,reflexAssessed:$('reflexAssessed').value,useVideoEvidence:$('evidenceSource').value==='video'};}
 function status(message){$('status').textContent=message;$('status').hidden=!message;}
+function clearGuidePrompt(){
+  $('guidePrompt').hidden=true;
+  globalThis.speechSynthesis?.cancel();
+}
+function showGuidePrompt(prompt){
+  const box=$('guidePrompt');box.hidden=false;box.dataset.phase=prompt.phase;box.dataset.kind=prompt.kind;
+  // Only the instruction is announced by screen readers, not every countdown tick.
+  if($('guideTitle').textContent!==prompt.title)$('guideTitle').textContent=prompt.title;
+  if($('guideHint').textContent!==prompt.hint)$('guideHint').textContent=prompt.hint;
+  $('guideCountdown').textContent=String(prompt.remaining);
+  if(prompt.announce&&prompt.speech&&$('guideVoice').checked&&globalThis.speechSynthesis&&globalThis.SpeechSynthesisUtterance){
+    try{
+      speechSynthesis.cancel();const utterance=new SpeechSynthesisUtterance(prompt.speech);utterance.lang='en-US';utterance.rate=1;
+      const voice=speechSynthesis.getVoices().find(v=>v.lang.toLowerCase().startsWith('en'));
+      if(voice)utterance.voice=voice;speechSynthesis.speak(utterance);
+    }catch{/* Visual prompts remain authoritative when speech is unavailable. */}
+  }
+}
 function recordStatus(message,error=false){
   const indicator=$('recordIndicator');
   // Keep an encoder failure visible through the finalizing/idle callbacks.
@@ -85,8 +106,8 @@ function disposeWorker(){
   worker?.terminate();worker=null;
   for(const {reject,timer} of pending.values()){clearTimeout(timer);reject(Error('Operation stopped.'));}pending.clear();
 }
-function stop(){
-  recording.stop('camera-stopped');cameraReady=false;
+function stop(reason='camera-stopped'){
+  recording.stop(reason);clearGuidePrompt();cameraReady=false;
   generation++;stopLiveLoop?.();stopLiveLoop=null;clearInterval(healthTimer);healthTimer=null;disposeWorker();
   if(source==='camera'){$('trackingHealth').hidden=true;$('trackingHealth').classList.remove('warning');video.hidden=true;$('empty').hidden=false;$('empty').textContent='Camera off';$('sourceBadge').textContent='Camera stopped';overlay.getContext('2d').clearRect(0,0,overlay.width,overlay.height);}
   stream?.getTracks().forEach(t=>t.stop());stream=null;
@@ -239,18 +260,18 @@ $('cameraStart').onclick=async()=>{
     applyPreviewOrientation();
     await video.play();if(token!==generation)return;
     sourceInfo.settings={...sourceInfo.settings,width:video.videoWidth,height:video.videoHeight,frameRate:stream.getVideoTracks()[0].getSettings().frameRate};
-    sourceInfo.runtime={build:'temporal14',browser:navigator.userAgent,frameInput:'canvas-oriented-bitmap'};
+    sourceInfo.runtime={build:'guided15',browser:navigator.userAgent,frameInput:'canvas-oriented-bitmap'};
     stream.getVideoTracks()[0].onended=()=>{stop();status('Camera disconnected. Collected data can still be exported.');};
     await initWorker(token);if(token!==generation)return;
     startTime=performance.now();cameraReady=true;refreshRecordingControls();
     lastTrackingUpdate=0;recentUpdates=[];trackingHealth();healthTimer=setInterval(trackingHealth,500);
     stopLiveLoop=startLiveLoop({video,onMode:mode=>{sourceInfo.runtime.frameScheduler=mode;},onError:e=>{if(token===generation){stop();status(e.message);}},onFrame:async(metadata,frameInfo)=>{
       if(token!==generation)return;
-      const t=(performance.now()-startTime)/1000;
+      const t=(performance.now()-startTime)/1000,stage=recording.capturePhase(t);
       const data=await detect(t,token);
       if(token!==generation){data.recordingImage?.close();return;}
-      // Live capture is unlabelled; exam intervals can be added when reviewing the clip.
-      const sample=accept(data.result,t,'unlabelled',0,data.inferenceMs);
+      // Preserve the instruction at capture, even when inference crosses a cue.
+      const sample=accept(data.result,t,stage.phase,stage.phaseStart,data.inferenceMs);
       sample.cameraMediaTimeSeconds=metadata?.mediaTime??video.currentTime;
       sample.cameraPresentedFrames=metadata?.presentedFrames??null;
       sample.cameraFrameScheduler=frameInfo.mode;
@@ -328,6 +349,7 @@ function refreshRecordingControls(){
   $('recordStart').disabled=!recording.supported||!cameraReady||source!=='camera'||!running||recording.busy||recordedClips.length>=3||!!activeConversion;
   $('recordStop').disabled=!recording.active;
   $('recordFormat').disabled=recording.busy;
+  $('guideVoice').disabled=recording.busy;
   if(!recording.supported)recordStatus('Recording unavailable in this browser.',true);
 }
 $('recordStart').onclick=()=>{
@@ -335,7 +357,9 @@ $('recordStart').onclick=()=>{
     const {samples:ignoredSamples,summary:ignoredSummary,observation:ignoredObservation,decision:ignoredDecision,clinicalHistory:ignoredHistory,...metadata}=exportObject();
     if(activeConversion)throw Error('Finish or cancel the video conversion before recording.');
     $('recordIndicator').classList.remove('warning');
-    recording.start({stream,video,sessionOriginPerf:startTime,metadata,phase:'unlabelled',format:$('recordFormat').value});
+    if(document.visibilityState==='hidden')throw Error('Keep this page visible to start the guided exam.');
+    recording.start({stream,video,sessionOriginPerf:startTime,metadata,phase:'unlabelled',format:$('recordFormat').value,guided:true});
+    window.dispatchEvent(new Event('guidedrecordingstart'));
     refreshRecordingControls();
   }catch(error){recordStatus('Cannot record: '+error.message,true);refreshRecordingControls();}
 };
@@ -440,6 +464,9 @@ $('exportCsv').onclick=()=>{
   download([header,...rows].map(row=>row.map(escape).join(',')).join('\r\n'),'text/csv;charset=utf-8','csv');
 };
 window.addEventListener('beforeunload',event=>{if(recording.busy||activeConversion){event.preventDefault();event.returnValue='';}});
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='hidden'&&recording.active){stop('page-hidden');status('Guide interrupted while the page was hidden. Review this clip or record again.');}
+});
 window.addEventListener('pagehide',()=>{activeConversion?.abort();clearPreparedDownload();stop();if(fileUrl)URL.revokeObjectURL(fileUrl);for(const clip of recordedClips){clip.checkController?.abort();clip.checkUi?.dispose();clip.repairUi?.dispose();URL.revokeObjectURL(clip.analysisUrl);URL.revokeObjectURL(clip.rawUrl);}});
 window.addEventListener('resize',drawTrace);
 // Read-only research snapshots also make reproducible browser QA possible.

@@ -37,11 +37,12 @@ function initialize() {
   function dismiss(){drawer.close();menu.setAttribute('aria-expanded','false');menu.focus({preventScroll:true});}
   menu.onclick=()=>open();close.onclick=dismiss;
   window.addEventListener('clipcreated',()=>{if(active&&!simulator)open('Clips');});
+  window.addEventListener('guidedrecordingstart',()=>{if(active&&!simulator&&drawer.open)dismiss();});
   drawer.addEventListener('click',event=>{if(event.target===drawer){const r=drawer.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right)dismiss();}});
   drawer.addEventListener('close',()=>menu.setAttribute('aria-expanded','false'));
   function move(node,host){if(!node)return;if(!homes.has(node)){const marker=document.createComment('desktop position');node.before(marker);homes.set(node,marker);}host.append(node);}
   const help=el('div','app-help');
-  help.innerHTML=simulator?'<h2>Use the live view</h2><p>Keep your hand in the camera frame. The eye preview stays above the hand video in portrait, and beside it in landscape.</p><p>Setup contains the camera, model, replay, and calibration controls. Scene contains the optional 3D view. Results contains charts and training comparisons.</p>':'<h2>Record an exam</h2><p>Start the camera, then record. Record starts both the original video and a video with eye measurements.</p><p>Use Setup to choose MP4 or WebM before recording. Open Clips to replay or download. Add exam phases later in Eye motion → Exam details. Review contains movement evidence and the examiner form.</p><p>Eye positions are normalized, not angles. A tracking result alone does not establish an NIHSS score.</p>';
+  help.innerHTML=simulator?'<h2>Use the live view</h2><p>Keep your hand in the camera frame. The eye preview stays above the hand video in portrait, and beside it in landscape.</p><p>Setup contains the camera, model, replay, and calibration controls. Scene contains the optional 3D view. Results contains charts and training comparisons.</p>':'<h2>Record an exam</h2><p>Start the camera, then Start exam. Follow Rest → Look left → Look right. The guide records both videos and stops automatically after about 17 seconds. Left and right always refer to the subject. Use an examiner’s target, not the phone screen edges.</p><p>Keep this page visible. In Clips, review suspicious tracks, then confirm the automatically selected phases in Eye motion or Video. Use Adjust to change the selections. Setup contains spoken prompts and MP4/WebM settings.</p><p>Eye positions are normalized, not angles. A tracking result alone does not establish an NIHSS score.</p>';
   const guide=el('a','button','Full guide ↗');guide.href='./guide.html';guide.target='_blank';guide.rel='noopener';help.append(guide);panes.Help.append(help);
   let active=false, timer=null, secondary=null;
   const blank=el('div','camera-empty','Start camera, then show your index finger');
@@ -93,6 +94,7 @@ function initialize() {
       text(extra,camera?(($('cameraPreview').dataset.facing==='environment'?'Rear camera · Natural preview':'Front camera · Mirror preview')+' · Yellow = fingertip'):source==='data'?'Human gaze replay · Change recording in Tools':'Virtual target · Change motion in Tools');
     }else{
       const recording=!$('recordStop').disabled;
+      menu.disabled=recording;clipShortcut.disabled=recording;
       $('recordStart').classList.toggle('app-superseded',recording);$('recordStop').classList.toggle('app-superseded',!recording);
       shell.classList.toggle('is-recording',recording);
       const count=$('recordingList').children.length;text(clipShortcut,count?`Clips (${count})`:'Clips');

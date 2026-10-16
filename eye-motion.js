@@ -53,6 +53,7 @@ export function clipGazeSuggestion(clip,report){
   const estimated=samples.reduce((n,s)=>n+['left','right'].filter(side=>s.reviewKinds[side]==='estimated').length,0);
   const result={score:null,candidates:[],title:'Review required',reasons:[],evidence,originalEvidence:original,
     pending,estimated,source:NIHSS_SOURCE,mode:'experimental-movement-suggestion',
+    selectionReview:clip.selectionReview?{status:clip.selectionReview.status,confirmedAt:clip.selectionReview.confirmedAt,scope:'Instruction labels and times only; not a clinical score.'}:null,
     limitation:'Normalized iris positions are not clinical gaze angles. Research thresholds are not NIHSS cutoffs.'};
   if(pending){result.reasons.push(`Choose a result for ${pending} remaining segment${pending===1?'':'s'} first.`);return result;}
   const originalSamples=reviewedSamples(clip,report,'original');

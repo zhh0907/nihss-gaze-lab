@@ -1,5 +1,6 @@
 import {ReviewArchive} from './review-archive.js';
 import {eyeUsable,eyeQualityLabel} from './eye-quality.js';
+import {GuidedExam} from './guided-exam.js?v=guided15';
 // All media stays in memory until the user downloads it. Detection frames are
 // copied BEFORE transfer to the worker; overlays never use a newer camera frame.
 export const RECORDING_SCHEMA='gaze-recording-1';
@@ -53,15 +54,16 @@ function makeRecorder(stream,mimeType,onError,onBytes) {
 }
 
 export class GazeRecorder {
-  constructor({onState=()=>{},onClip=()=>{},onError=()=>{}}={}) {
+  constructor({onState=()=>{},onClip=()=>{},onError=()=>{},onPrompt=()=>{},onGuideEnd=()=>{}}={}) {
     this.onState=onState;this.onClip=onClip;this.onError=onError;this.current=null;this.finishing=null;
+    this.onPrompt=onPrompt;this.onGuideEnd=onGuideEnd;
   }
   get active(){return !!this.current && !this.current.stopping;}
   get busy(){return !!this.current || !!this.finishing;}
   get id(){return this.active?this.current.id:null;}
   get supported(){return !!recordingMime() && typeof HTMLCanvasElement.prototype.captureStream==='function';}
 
-  start({stream,video,sessionOriginPerf,metadata,phase,format='auto'}) {
+  start({stream,video,sessionOriginPerf,metadata,phase,format='auto',guided=false}) {
     if(this.busy)throw Error('The previous clip is still being finalized. Try again shortly.');
     if(!this.supported)throw Error('Recording is unavailable in this browser. Try a browser with MediaRecorder and canvas capture support.');
     if(!stream?.getVideoTracks().some(t=>t.readyState==='live') || !video.videoWidth)throw Error('Start the camera and wait for detection first.');
@@ -92,8 +94,14 @@ export class GazeRecorder {
       item.analysis.recorder.start(1000);
       item.rawStartedPerf=performance.now();item.raw.recorder.start(1000);
       item.events.push({type:'start',recordingTimeSeconds:0,phase});
+      if(guided)item.guide=new GuidedExam({originPerf:item.rawStartedPerf,onPrompt:this.onPrompt});
       item.timer=setInterval(()=>{
-        const elapsed=(performance.now()-item.startedPerf)/1000;
+        const now=performance.now(),elapsed=(now-item.startedPerf)/1000;
+        const guide=item.guide?.tick(now);
+        if(guide&&guide.status!=='running'){
+          const reason=guide.status==='complete'?'guided-complete':'guided-interrupted';
+          this.stop(reason);queueMicrotask(()=>this.onGuideEnd(reason));return;
+        }
         this.onState({state:'recording',elapsed,frames:item.frames.length});
         if(elapsed>=300)this.stop('time-limit');
       },250);
@@ -107,6 +115,14 @@ export class GazeRecorder {
 
   wantsFrame(t){return this.active && t>=this.current.startSessionTime;}
 
+  capturePhase(sessionTime){
+    const item=this.current;
+    if(!this.active||!item.guide)return {phase:'unlabelled',phaseStart:0};
+    const rawOrigin=item.startSessionTime+(item.rawStartedPerf-item.startedPerf)/1000;
+    const p=item.guide.phaseAt(sessionTime-rawOrigin);
+    return {phase:p.phase,phaseStart:p.phase==='unlabelled'?0:rawOrigin+p.phaseStart};
+  }
+
   addFrame(image,sample,id) {
     try{
       const item=this.current;
@@ -117,6 +133,7 @@ export class GazeRecorder {
         analysisVideoTimeSeconds:(renderedAt-item.startedPerf)/1000,
         rawVideoTimeSeconds:sample.t-item.startSessionTime-(item.rawStartedPerf-item.startedPerf)/1000};
       if(frame.rawVideoTimeSeconds<0)return;
+      if(item.guide){const stage=this.capturePhase(sample.t);frame.phase=stage.phase;frame.phaseStart=stage.phaseStart;}
       item.reviewArchive.add(image,item.frames.length);
       item.ctx.drawImage(image,0,144,item.width,item.frameHeight);
       item.ctx.save();item.ctx.translate(0,144);
@@ -154,14 +171,16 @@ export class GazeRecorder {
     const item=this.current;if(!item)return Promise.resolve(null);
     item.stopping=true;clearInterval(item.timer);
     const endPerf=performance.now(),duration=(endPerf-item.startedPerf)/1000;
+    const guidedExam=item.guide?.finish(endPerf,reason)??null;
     item.events.push({type:'stop',recordingTimeSeconds:duration,reason});
-    this.onState({state:'finalizing',elapsed:duration,frames:item.frames.length});
+    this.onState({state:'finalizing',elapsed:duration,frames:item.frames.length,reason});
     // Freeze metadata now. A subsequent input reset must not relabel old media.
     const data={schema:RECORDING_SCHEMA,...item.metadata,recording:{id:item.id,startedAt:item.startedAt,durationSeconds:duration,
       startSessionTimeSeconds:item.startSessionTime,endSessionTimeSeconds:item.startSessionTime+duration,stopReason:reason,
       rawStartsAfterAnalysisSeconds:(item.rawStartedPerf-item.startedPerf)/1000,
       analysisWidth:item.canvas.width,analysisHeight:item.canvas.height,analysisFrameHeight:item.frameHeight,analysisFrameOffsetY:144,
       rawInputMirrored:item.metadata.source.inputMirrored??false,analysisMirrored:false,audio:false,
+      guidedExam,
       timing:'Capture and canvas-presentation times share a monotonic browser clock. Video offsets are estimates, not hardware/encoder frame timestamps. Analysis frames are held between detections; raw video preserves camera motion.'},
       samples:item.frames,events:item.events,errors:item.errors};
     for(const r of [item.analysis,item.raw])if(r.recorder.state!=='inactive')r.recorder.stop();

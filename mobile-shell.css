@@ -175,3 +175,7 @@ body.app-mode .drawer-content{padding:8px 10px 20px}
 .hold-row{display:grid;grid-template-columns:42px 1fr 1fr;align-items:center;gap:6px;margin:6px 0}
 .hold-row>strong{font-size:12px}.hold-row>button{display:flex;justify-content:space-between;align-items:center;gap:4px;min-width:0;min-height:44px;padding:6px;font-size:12px}
 .hold-row small{font-size:11px;font-variant-numeric:tabular-nums}.hold-row button[aria-pressed=true]{background:#235348;border-color:#72bfa6}
+.guide-prompt{position:absolute;top:10px;left:10px;right:10px;z-index:4;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid #70b9a3;border-radius:10px;background:#0b2526ed;color:#edfdf7;pointer-events:none}
+.guide-prompt strong{display:block;font-size:24px;line-height:1.2}.guide-prompt span{display:block;font-size:12px;line-height:1.4;margin-top:4px;color:#b8dcd3}.guide-prompt b{font-size:30px;min-width:30px;text-align:center;font-variant-numeric:tabular-nums}
+.selection-review .hint{font-size:12px;margin:6px 0}.selection-review .hint:empty{display:none}.selection-actions{display:grid;grid-template-columns:1.6fr 1fr;gap:7px;margin:8px 0}.selection-actions button{min-height:44px}
+@media(max-height:500px){.guide-prompt{top:4px;padding:6px 10px}.guide-prompt strong{font-size:18px}.guide-prompt span{font-size:11px}.mobile-app[data-app=gaze].is-recording #recordIndicator:not(.warning){display:none}}

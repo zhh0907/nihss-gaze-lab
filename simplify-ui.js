@@ -21,7 +21,7 @@ export function simplifyUI(){
     fold('Charts & research comparisons',nodesResults);
     const scene=$('view');fold('Optional 3D scene',[scene]);
   }else{
-    const formatNodes=[label('recordFormat'),$('recordFormat'),$('formatHint'),$('previewFlip').closest('label')];
+    const formatNodes=[label('recordFormat'),$('recordFormat'),$('formatHint'),$('previewFlip').closest('label'),$('guideVoiceLabel'),$('guideSetupHint')];
     const previewHint=$('previewFlip').closest('label').nextElementSibling;
     if(previewHint?.classList.contains('hint'))formatNodes.push(previewHint);
     fold('Recording & display settings',formatNodes);

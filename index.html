@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Gaze Lab · Eye Tracking & NIHSS</title><link rel="icon" href="data:,"><link rel="stylesheet" href="./style.css?v=live11"><link rel="stylesheet" href="./mobile.css"><meta name="description" content="Eye Tracking & NIHSS Gaze — browser-based research app by Honghao Zhao."><link rel="stylesheet" href="./mobile-shell.css?v=temporal14"></head>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Gaze Lab · Eye Tracking & NIHSS</title><link rel="icon" href="data:,"><link rel="stylesheet" href="./style.css?v=live11"><link rel="stylesheet" href="./mobile.css"><meta name="description" content="Eye Tracking & NIHSS Gaze — browser-based research app by Honghao Zhao."><link rel="stylesheet" href="./mobile-shell.css?v=guided15"></head>
 <body>
 <header><div><span class="eyebrow">HONGHAO ZHAO · RESEARCH PROTOTYPE</span><h1>Eye Tracking & NIHSS Gaze</h1><p>Video → Head-pose correction → Movement evidence → Examiner review</p></div><a href="./guide.html">Guide ↗</a></header>
 <nav class="mobile-nav" aria-label="Quick navigation"><a href="#settings">Input</a><a href="#live">Live view</a><a href="#recordings">Clip</a><a href="#assessment">Review</a></nav><main>
@@ -11,6 +11,8 @@
   <label class="check"><input id="previewFlip" type="checkbox" checked>Flip front-camera preview</label>
   <p class="hint">Display only. Eye markers follow the picture; measurements and saved videos keep their original orientation.</p>
   <label for="recordFormat">Recording format</label><select id="recordFormat"><option value="mp4">MP4</option><option value="webm">WebM</option></select><p id="formatHint" class="hint">Checking browser video formats…</p>
+  <label class="check" id="guideVoiceLabel"><input id="guideVoice" type="checkbox" checked>Spoken exam prompts</label>
+  <p class="hint" id="guideSetupHint">Guided recording: Rest → Look left → Look right, about 17 seconds. Use the examiner’s target; phone screen edges do not define full gaze range.</p>
   <label for="videoFile">Or import a phone video</label><input id="videoFile" type="file" accept="video/*">
   <label class="check"><input id="inputMirrored" type="checkbox">Input is already mirrored; unmirror before analysis</label>
   <p class="hint">Analysis uses unmirrored coordinates. Left/right refer to the subject. Eye position is normalized by half the eye width, not degrees.</p>
@@ -35,10 +37,10 @@
 <div class="measurements">
   <div class="card camera-card" id="live">
     <div class="card-heading"><h2>Live view</h2><span id="sourceBadge" class="badge">No input</span></div>
-    <div class="stage"><video id="video" playsinline muted controls hidden></video><canvas id="overlay" width="1280" height="720"></canvas><div id="empty">Camera off</div></div>
+    <div class="stage"><video id="video" playsinline muted controls hidden></video><canvas id="overlay" width="1280" height="720"></canvas><div id="empty">Camera off</div><div id="guidePrompt" class="guide-prompt" hidden><div role="status" aria-live="polite"><strong id="guideTitle"></strong><span id="guideHint"></span></div><b id="guideCountdown" aria-hidden="true"></b></div></div>
     <p id="trackingHealth" class="hint" hidden>Waiting for eye tracking…</p>
     <p id="status" role="status" aria-live="polite" hidden></p>
-    <div class="record-bar"><div class="buttons"><button id="recordStart" disabled>● Start recording</button><button id="recordStop" disabled>Stop recording</button></div><span id="recordIndicator" role="status" hidden></span></div>
+    <div class="record-bar"><div class="buttons"><button id="recordStart" disabled>● Start exam</button><button id="recordStop" disabled>Stop recording</button></div><span id="recordIndicator" role="status" hidden></span></div>
     <div class="metrics">
       <div><span>Left eye</span><b id="leftValue">—</b><small id="leftQuality" class="eye-quality">Waiting</small></div>
       <div><span>Right eye</span><b id="rightValue">—</b><small id="rightQuality" class="eye-quality">Waiting</small></div>
@@ -53,7 +55,7 @@
 <section class="card recordings-panel" id="recordings">
   <div class="card-heading"><h2>Recordings & replay</h2><span class="badge">Local only · No upload</span></div>
   <p class="hint">Each clip includes both eye positions, head pose, phase labels and timestamps. Download before closing or refreshing. Switching input keeps existing clips.</p>
-  <p id="recordingsEmpty" class="hint">No clips yet. Start the camera, wait for detection, then select Start recording.</p>
+  <p id="recordingsEmpty" class="hint">No clips yet. Start the camera, wait for detection, then select Start exam.</p>
   <p id="recordingsLimit" class="warning" hidden>Up to 3 clips are kept in memory. Download and remove a clip to record another.</p>
   <div id="recordingList"></div>
 </section>
@@ -72,4 +74,4 @@
 </section>
 <section class="card exports"><div><h2>Export full session</h2><p class="hint">Export measurements and decisions for the full session here. Use the clip buttons above for individual recordings and their data.</p></div><div class="buttons"><button id="exportJson" disabled>Export JSON</button><button id="exportCsv" disabled>Export CSV</button><a class="button" href="./guide.html">Methods & instructions ↗</a></div></section>
 <footer>Gaze Lab v0.2.1 · Planar pose correction · Independent eyes · No initial-gaze zeroing · Local processing</footer>
-</main><script type="module" src="./app.js?v=temporal14"></script><script type="module" src="./english-ui.js"></script><script type="module" src="./mobile-shell.js?v=live11"></script></body></html>
+</main><script type="module" src="./app.js?v=guided15"></script><script type="module" src="./english-ui.js"></script><script type="module" src="./mobile-shell.js?v=guided15"></script></body></html>
