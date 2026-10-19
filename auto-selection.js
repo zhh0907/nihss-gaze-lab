@@ -70,9 +70,9 @@ export function proposeAutoSelections(samples=[],checkedIndices=new Set(samples.
   const result={version:'guided-auto-selection-v1',threePositionSelection:{},temporalSelection:{},issues:[],complete:false,
     provenance:{instructionSource:'Recorded prompt presentation times',selectionSource:'Reviewed, checked eye tracks',
       guidedVersion:guidedExam?.version??null,guidedStatus:guidedExam?.status??null,
-      thresholds:{...AUTO_SELECTION_RULES},phases:{},requiresConfirmation:true,
+      thresholds:{...AUTO_SELECTION_RULES},phases:{},requiresConfirmation:false,
       note:'Recorded instruction labels are retained even when the eyes do not move. No amplitude normalization or reflex inference is performed.'}};
-  if(!guidedExam||guidedExam.version!=='guided-exam-v1'||!Array.isArray(guidedExam.intervals)){
+  if(!guidedExam||!['guided-exam-v1','guided-exam-v2'].includes(guidedExam.version)||!Array.isArray(guidedExam.intervals)){
     result.issues.push('This clip has no recorded guided-exam timings. Mark the task phases manually.');return result;
   }
   const phases=guidedExam.intervals.filter(r=>PHASES.includes(r?.phase));
@@ -93,7 +93,7 @@ export function proposeAutoSelections(samples=[],checkedIndices=new Set(samples.
   }
   for(const phase of PHASES){
     const interval=completed.find(r=>r.phase===phase),provenance=result.provenance.phases[phase]={completed:!!interval};
-    if(!interval){result.issues.push(`${labelFor(phase)} was not completed; mark this phase manually or record again.`);continue;}
+    if(!interval){result.issues.push(`${labelFor(phase)} was not completed. Record a new exam.`);continue;}
     // B keeps the full instructed hold, including any missing tail or blink.
     result.temporalSelection[phase]={start:interval.holdStart,end:interval.end};
     Object.assign(provenance,{promptStart:interval.start,holdStart:interval.holdStart,end:interval.end,
@@ -102,7 +102,7 @@ export function proposeAutoSelections(samples=[],checkedIndices=new Set(samples.
     const quality=phaseQuality(samples,checkedIndices,interval.holdStart,interval.end);provenance.quality=quality;
     if(!quality.adequate){result.issues.push(...quality.issues.map(s=>`${labelFor(phase)}: ${s}`));continue;}
     const anchor=selectAnchor(samples,checkedIndices,interval,quality);provenance.candidateWindows=anchor.evaluated;
-    if(!anchor.selected){result.issues.push(`${labelFor(phase)}: no stable, checked window represents the end of the hold. Adjust the selection manually.`);continue;}
+    if(!anchor.selected){result.issues.push(`${labelFor(phase)}: no stable, checked window represents the end of the hold. A cannot assess this phase.`);continue;}
     result.threePositionSelection[keyFor(phase)]=anchor.selected.time;
     provenance.selectedPosition=anchor.selected;
   }

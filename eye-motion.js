@@ -10,7 +10,21 @@ export const EYE_VIDEO_SIZE=Object.freeze({width:960,height:300});
 export function reviewedSamples(clip,report,version='selected'){
   const reviews=new Map(report.frames.map(f=>[f.sourceIndex,f]));
   return clip.data.samples.map((s,i)=>{
-    const out=selectedFrame(s,reviews.get(i),version);
+    const review=reviews.get(i),out=selectedFrame(s,review,version);
+    if(version==='selected'){
+      for(const side of ['left','right']){
+        const eyeReview=review?.[side];
+        // A live point has not passed image review merely because the tracker
+        // marked it valid. Do not present unchecked or unresolved points as
+        // observed evidence in the default animation. Original comparison data
+        // remains available, and explicit examiner choices keep their meaning.
+        if(!review){out[side]=null;out.reviewKinds[side]='unchecked';}
+        else if(!eyeReview?.ignored&&eyeReview?.flagged&&(!eyeReview.decision||eyeReview.decision==='unreviewed')){
+          out[side]=null;out.reviewKinds[side]='unresolved';
+        }
+      }
+      out.valid=eyeUsable(out,'left')&&eyeUsable(out,'right');
+    }
     if(clip.reviewIntervals){
       const phase=phaseAt(s.rawVideoTimeSeconds,clip.reviewIntervals);
       out.phase=phase.phase;out.phaseStart=s.t-(s.rawVideoTimeSeconds-phase.phaseStart);
@@ -23,7 +37,7 @@ export function eyeDiagramState(sample){
   return Object.fromEntries(['right','left'].map(side=>{
     const kind=sample?.reviewKinds?.[side]??'original',usable=eyeUsable(sample,side);
     return [side,{position:usable?sample[side].corrected:null,kind,
-      label:kind==='closed'?'Eye closed':kind==='blink'?'Blink':kind==='unresolved'?'Unresolved':!usable?'No measurement':kind==='estimated'?'Accepted estimate':'Observed'}];
+      label:kind==='closed'?'Eye closed':kind==='blink'?'Blink':kind==='unresolved'?'Unresolved':kind==='unchecked'?'Not checked':!usable?'No measurement':kind==='estimated'?'Accepted estimate':'Observed'}];
   }));
 }
 

@@ -4,9 +4,9 @@ Method B is an experimental alternative to Method A (three selected positions). 
 
 ## Use
 
-Finish suspicious-segment review. New [guided recordings](GUIDED_EXAM.md) default to **B · Temporal assessment** in **Eye motion** or **Video**. The app selects each complete recorded hold automatically, including any tracking gaps. Inspect the Rest, Left and Right previews, then **Confirm phases**. This confirms instruction labels and times, not a clinical score. The app cannot verify patient cooperation or whether the presented targets elicited full horizontal gaze. Rest means the initial resting observation, not a calibration that resets the gaze to zero.
+New [spoken guided recordings](GUIDED_EXAM.md) show **B · Full holds** alongside A automatically. Holds come from recorded instruction timing, including tracking gaps. Rest/Left/Right previews only seek; no phase confirmation is needed. Automatic analysis excludes flagged eyes and does not consume clinician feedback. Completing optional segment review adds a separate assisted suggestion. The app cannot verify cooperation or adequate targets. Rest is an initial observation, not calibration that resets gaze to zero.
 
-To change a hold, open **Adjust**, pause at its instructed start or end, and tap the corresponding **Start** or **End** button. Older clips show these manual controls directly. Use one non-overlapping interval per direction, at least one second long, based on the actual examination rather than detected motion. Selections survive switching methods and views. **Details** shows coverage, hold duration, and an original/reviewed comparison for both methods. **Exam details → Clear holds** resets B; **Restore automatic selections** restores both methods on guided clips. The legacy phase summary is also retained.
+Older clips without guide timing retain manual **Start**/**End** controls and a method selector. Use one non-overlapping interval per direction, at least one second long, based on instructions rather than detected motion. **Details** shows coverage and original/reviewed evidence. New guided clips hide these manual controls. Incomplete recordings remain incomplete; repeat the exam rather than infer a missing instruction from eye movement.
 
 ## Evidence extraction
 
@@ -32,6 +32,6 @@ Published video-gaze work also uses consecutive-frame evidence, including [Pibre
 
 ## Provenance and validation
 
-Review JSON schema `gaze-reviewed-motion-7` saves original samples, review decisions, recorded prompt timings, both methods' selections, automatic-selection provenance, manual edits, phase confirmation history, original and reviewed method evidence, thresholds, contributing sample indices, estimated durations, reasons and the active method. Source recordings and measurements are not overwritten. Nothing is uploaded.
+Review JSON schema `gaze-reviewed-motion-8` saves original samples, recorded speech and hold times, both automatic methods with quality exclusions, review choices and assisted evidence separately, plus selections, thresholds and supporting indices. Historical manual-selection provenance remains available for older clips. Source recordings and measurements are not overwritten. Nothing is uploaded.
 
 Automated synthetic fixtures cover different frame rates and cadence, spikes, sustained unilateral restriction, conjugate rest offset, missing extreme-position tails, long gaps, blinks, closure, head rejection, unchecked samples, timing errors, original-data preservation, accepted estimates and clinician-only score 2. Browser checks cover the English controls, method switching, shared timelines, exports and mobile widths from 320 to 768 pixels. These verify software behavior, not clinical accuracy. Physical iPhone/Safari testing and labelled-patient evaluation remain outstanding.

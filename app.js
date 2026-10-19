@@ -1,12 +1,12 @@
 import {cameraOrientation} from './camera-orientation.js';
 import {runSelfCheck} from './self-check.js?v=closed12';
-import {createSelfCheckUI} from './self-check-ui.js?v=guided15';
-import {simplifyUI} from './simplify-ui.js?v=guided15';
+import {createSelfCheckUI} from './self-check-ui.js?v=spoken16';
+import {simplifyUI} from './simplify-ui.js?v=spoken16';
 import {eyeUsable,eyeQualityLabel} from './eye-quality.js';
 import {DEFAULTS,VERSION,measureFrame,DisplayFilter} from './geometry.js?v=quality5';
 import {parseIntervals,phaseAt,summarize,scoreNIHSS} from './assessment.js';
 import {demoInput} from './fixtures.js';
-import {GazeRecorder,drawEyeMarkers,extensionFor,recordingCsv,recordingMime} from './recording.js?v=guided15';
+import {GazeRecorder,drawEyeMarkers,extensionFor,recordingCsv,recordingMime} from './recording.js?v=spoken16';
 import {convertVideo} from './video-export.js?v=repair6';
 import {startLiveLoop} from './live-loop.js?v=live3';
 import {captureVideoFrame,bitmapWithDeadline} from './frame-capture.js?v=live3';
@@ -38,7 +38,7 @@ const recording=new GazeRecorder({
   onClip:clip=>{recordedClips.push(clip);renderRecordings();enqueueSelfCheck(clip);window.dispatchEvent(new Event('clipcreated'));},
   onError:message=>{recordStatus('Recording error: '+message,true);},
   onPrompt:showGuidePrompt,
-  onGuideEnd:reason=>{stop(reason);if(reason==='guided-interrupted')status('Guide interrupted. Review completed phases or record again.');},
+  onGuideEnd:(reason,detail)=>{stop(reason);if(reason==='guided-interrupted')status(detail?.startsWith('speech-')?'Voice guidance stopped. Check the sound and restart the exam.':'Guide interrupted. Record a new exam to complete all directions.');},
 });
 const reasonNames={'no-face':'No face detected','multiple-faces':'Multiple faces','pose-unavailable':'Head pose unavailable','head-out-of-range':'Head pose outside current limits','eye-unavailable':'Eye landmarks missing','eye-out-of-frame':'Eye outside frame','eye-too-small':'Eye too small in image','blink-or-occlusion':'Blink / occlusion','iris-outside-eye':'Iris location invalid'};
 const phaseNames={center:'Center / rest',left:'Subject looks left',right:'Subject looks right',reflex:'Clinical reflex exam',unlabelled:'Unlabelled'};
@@ -48,21 +48,13 @@ function observation(){return {reviewer:$('reviewer').value.trim(),examAdequate:
 function status(message){$('status').textContent=message;$('status').hidden=!message;}
 function clearGuidePrompt(){
   $('guidePrompt').hidden=true;
-  globalThis.speechSynthesis?.cancel();
 }
 function showGuidePrompt(prompt){
   const box=$('guidePrompt');box.hidden=false;box.dataset.phase=prompt.phase;box.dataset.kind=prompt.kind;
   // Only the instruction is announced by screen readers, not every countdown tick.
   if($('guideTitle').textContent!==prompt.title)$('guideTitle').textContent=prompt.title;
   if($('guideHint').textContent!==prompt.hint)$('guideHint').textContent=prompt.hint;
-  $('guideCountdown').textContent=String(prompt.remaining);
-  if(prompt.announce&&prompt.speech&&$('guideVoice').checked&&globalThis.speechSynthesis&&globalThis.SpeechSynthesisUtterance){
-    try{
-      speechSynthesis.cancel();const utterance=new SpeechSynthesisUtterance(prompt.speech);utterance.lang='en-US';utterance.rate=1;
-      const voice=speechSynthesis.getVoices().find(v=>v.lang.toLowerCase().startsWith('en'));
-      if(voice)utterance.voice=voice;speechSynthesis.speak(utterance);
-    }catch{/* Visual prompts remain authoritative when speech is unavailable. */}
-  }
+  $('guideCountdown').textContent=Number.isFinite(prompt.remaining)?String(prompt.remaining):'…';
 }
 function recordStatus(message,error=false){
   const indicator=$('recordIndicator');
@@ -260,7 +252,7 @@ $('cameraStart').onclick=async()=>{
     applyPreviewOrientation();
     await video.play();if(token!==generation)return;
     sourceInfo.settings={...sourceInfo.settings,width:video.videoWidth,height:video.videoHeight,frameRate:stream.getVideoTracks()[0].getSettings().frameRate};
-    sourceInfo.runtime={build:'guided15',browser:navigator.userAgent,frameInput:'canvas-oriented-bitmap'};
+    sourceInfo.runtime={build:'spoken16',browser:navigator.userAgent,frameInput:'canvas-oriented-bitmap'};
     stream.getVideoTracks()[0].onended=()=>{stop();status('Camera disconnected. Collected data can still be exported.');};
     await initWorker(token);if(token!==generation)return;
     startTime=performance.now();cameraReady=true;refreshRecordingControls();
@@ -349,7 +341,6 @@ function refreshRecordingControls(){
   $('recordStart').disabled=!recording.supported||!cameraReady||source!=='camera'||!running||recording.busy||recordedClips.length>=3||!!activeConversion;
   $('recordStop').disabled=!recording.active;
   $('recordFormat').disabled=recording.busy;
-  $('guideVoice').disabled=recording.busy;
   if(!recording.supported)recordStatus('Recording unavailable in this browser.',true);
 }
 $('recordStart').onclick=()=>{

@@ -1,5 +1,5 @@
 import {selectedFrame} from './segment-review.js';
-import {proposeAutoSelections} from './auto-selection.js';
+import {proposeAutoSelections} from './auto-selection.js?v=spoken16';
 
 export const SELECTION_REVIEW_VERSION='guided-selection-review-v1';
 const POSITION_KEYS=['rest','left','right'],PHASE_KEYS=['center','left','right'],BOUNDARIES=['start','end'];
@@ -7,7 +7,7 @@ const runtimeReports=new WeakMap(),EPS=1e-8;
 const copy=value=>structuredClone(value);
 const now=()=>new Date().toISOString();
 const guidedFor=clip=>clip?.data?.recording?.guidedExam;
-const isGuided=clip=>guidedFor(clip)?.version==='guided-exam-v1';
+const isGuided=clip=>['guided-exam-v1','guided-exam-v2'].includes(guidedFor(clip)?.version);
 const selections=clip=>({threePositionSelection:copy(clip.threePositionSelection??{}),temporalSelection:copy(clip.temporalSelection??{})});
 const freeze=value=>{if(value&&typeof value==='object'){Object.values(value).forEach(freeze);Object.freeze(value);}return value;};
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
@@ -88,6 +88,8 @@ export function refreshAutomaticSelections(clip,report,{force=false}={}){
   }
   for(const key of PHASE_KEYS)if(clip.temporalSelection[key]&&!Object.keys(clip.temporalSelection[key]).length)delete clip.temporalSelection[key];
   state.autoProposal=copy(proposal);state.reportVersion=[report.schema,report.version,report.createdAt].filter(Boolean).join('/');
+  state.requiresManualPhaseLabels=false;
+  state.phaseSource='Recorded instruction times';
   state.fingerprint=sourceFingerprint;state.decisionFingerprint=decisionFingerprint;
   pushHistory(state,{type:force?'restore-automatic':'automatic-selection',reportReplaced:replaced,
     fingerprint:sourceFingerprint,selections:selections(clip),issues:proposal.issues});

@@ -169,6 +169,8 @@ body.app-mode .drawer-content{padding:8px 10px 20px}
 .position-buttons strong{font-size:13px}.position-buttons small{font-size:11px;font-variant-numeric:tabular-nums}
 .position-buttons button[aria-pressed=true]{background:#235348;border-color:#72bfa6}
 .position-values{width:100%;font-size:12px}.position-values th,.position-values td{padding:5px;text-align:left}
+.drawer-pane .clip-score .position-values{min-width:0;table-layout:fixed}
+.clip-score .position-values th,.clip-score .position-values td{white-space:normal;overflow-wrap:anywhere;vertical-align:top}
 .gaze-methods{margin:8px 0}.gaze-methods>label{display:flex;align-items:center;gap:8px;font-size:12px}
 .gaze-methods>label>select{flex:1;min-width:0;width:auto;min-height:44px}
 .temporal-holds[hidden]{display:none}.temporal-holds .hint{font-size:12px;line-height:1.4;margin:6px 0}

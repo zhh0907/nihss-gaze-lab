@@ -1,6 +1,6 @@
 import {ReviewArchive} from './review-archive.js';
 import {eyeUsable,eyeQualityLabel} from './eye-quality.js';
-import {GuidedExam} from './guided-exam.js?v=guided15';
+import {GuidedExam,GuideSpeech} from './guided-exam.js?v=spoken16';
 // All media stays in memory until the user downloads it. Detection frames are
 // copied BEFORE transfer to the worker; overlays never use a newer camera frame.
 export const RECORDING_SCHEMA='gaze-recording-1';
@@ -54,9 +54,9 @@ function makeRecorder(stream,mimeType,onError,onBytes) {
 }
 
 export class GazeRecorder {
-  constructor({onState=()=>{},onClip=()=>{},onError=()=>{},onPrompt=()=>{},onGuideEnd=()=>{}}={}) {
+  constructor({onState=()=>{},onClip=()=>{},onError=()=>{},onPrompt=()=>{},onGuideEnd=()=>{},guideSpeakerFactory=()=>new GuideSpeech()}={}) {
     this.onState=onState;this.onClip=onClip;this.onError=onError;this.current=null;this.finishing=null;
-    this.onPrompt=onPrompt;this.onGuideEnd=onGuideEnd;
+    this.onPrompt=onPrompt;this.onGuideEnd=onGuideEnd;this.guideSpeakerFactory=guideSpeakerFactory;
   }
   get active(){return !!this.current && !this.current.stopping;}
   get busy(){return !!this.current || !!this.finishing;}
@@ -67,6 +67,8 @@ export class GazeRecorder {
     if(this.busy)throw Error('The previous clip is still being finalized. Try again shortly.');
     if(!this.supported)throw Error('Recording is unavailable in this browser. Try a browser with MediaRecorder and canvas capture support.');
     if(!stream?.getVideoTracks().some(t=>t.readyState==='live') || !video.videoWidth)throw Error('Start the camera and wait for detection first.');
+    const guideSpeaker=guided?this.guideSpeakerFactory():null;
+    if(guideSpeaker?.supported===false)throw Error('Voice guidance is unavailable in this browser. Use a browser with speech support and restart the exam.');
     const mime=recordingMime(globalThis.MediaRecorder,format),canvas=document.createElement('canvas');
     if(!mime)throw Error(`${format.toUpperCase()} recording is unavailable in this browser. Choose another format.`);
     const scale=Math.min(1,1280/video.videoWidth,960/video.videoHeight);
@@ -94,19 +96,24 @@ export class GazeRecorder {
       item.analysis.recorder.start(1000);
       item.rawStartedPerf=performance.now();item.raw.recorder.start(1000);
       item.events.push({type:'start',recordingTimeSeconds:0,phase});
-      if(guided)item.guide=new GuidedExam({originPerf:item.rawStartedPerf,onPrompt:this.onPrompt});
+      // Keep this synchronous: the first spoken cue must remain inside the
+      // Start exam user gesture for Safari and other mobile speech engines.
+      if(guided)item.guide=new GuidedExam({originPerf:item.rawStartedPerf,onPrompt:this.onPrompt,speaker:guideSpeaker});
       item.timer=setInterval(()=>{
         const now=performance.now(),elapsed=(now-item.startedPerf)/1000;
         const guide=item.guide?.tick(now);
         if(guide&&guide.status!=='running'){
           const reason=guide.status==='complete'?'guided-complete':'guided-interrupted';
-          this.stop(reason);queueMicrotask(()=>this.onGuideEnd(reason));return;
+          const detail=item.guide.failureReason??null;
+          if(detail)this.onError('Voice guidance stopped. Check device volume and restart the exam.');
+          this.stop(reason);queueMicrotask(()=>this.onGuideEnd(reason,detail));return;
         }
         this.onState({state:'recording',elapsed,frames:item.frames.length});
         if(elapsed>=300)this.stop('time-limit');
       },250);
       this.onState({state:'recording',elapsed:0,frames:0});
     }catch(error){
+      guideSpeaker?.cancel();
       for(const r of [item.analysis,item.raw])if(r?.recorder.state==='recording')r.recorder.stop();
       for(const s of [item.analysisStream,item.rawStream])s?.getTracks().forEach(t=>t.stop());
       this.current=null;throw error;

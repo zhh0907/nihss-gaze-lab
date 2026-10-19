@@ -1,27 +1,31 @@
-# Guided recording and automatic selection
+# Spoken gaze recording and automatic assessment
 
-Start the camera, then select **Start exam**. The visible guide runs Get ready → Rest → Look left → Look right and ends recording automatically. Directions always refer to the subject, regardless of camera facing mode or preview mirroring. An examiner should present appropriate targets; the phone screen edges do not define full gaze range. Optional English speech can be disabled in **Setup → Recording & display settings**. Visible cue timing is authoritative; audio is supplementary.
+Start the camera, turn up the sound, then select **Start gaze exam**. The app announces an NIH Stroke Scale eye movement test, asks the patient to look straight ahead, as far left as comfortable, and as far right as comfortable. Recording stops automatically. Directions always refer to the patient, independent of camera choice or preview mirroring. The examiner should present suitable targets; phone screen edges do not define full gaze range.
 
-## Timing
+This guides horizontal-gaze acquisition for NIHSS Best Gaze research. It is not the entire NIHSS examination, a validated clinical protocol, or an instruction to perform reflex maneuvers. The examiner must verify that the patient can hear and follow instructions and that the examination is adequate.
 
-The nominal sequence is 3 seconds to prepare, 1 second to move to rest, a 3-second rest hold, 2 seconds to move left, a 3-second left hold, 2 seconds to move right, and a 3-second right hold. Browser scheduling can make the total slightly longer than 17 seconds. This is an acquisition guide, not a validated clinical protocol.
+## Timing and failure handling
 
-`guided-exam.js` records actual cue transitions on the raw-video clock. Each interval stores `phase`, `start`, `holdStart`, `end` and `completed`; events preserve the cue history. Analysis frames retain the phase at capture even when inference finishes after the next cue. Video alignment is approximate and does not provide hardware frame timestamps.
+`guided-exam-v2` uses browser speech synthesis by default. The first speech request occurs in the recording-button gesture. Each instruction's actual speech-start and speech-end events are saved on the raw-video clock. A queued instruction does not label captured samples. After the direction cue ends, the app allows 1 second to move to center or 2 seconds to move left/right, then records a 3-second hold. The introduction adds a 3-second preparation period. Total duration is 17 seconds plus speech and scheduling delay, typically about 30 seconds depending on the voice.
 
-Keep the page visible. Stopping early, hiding the page, or a timer interruption longer than 1.5 seconds ends the guide. Completed phases remain available; unfinished phases stay incomplete. The system never backfills prompts that were not displayed.
+Native speech callbacks indicate browser playback progress, not that sound was audible or understood. Speech is not recorded into the video; microphone access is not requested. Missing speech support rejects a guided start. Speech errors, a 7-second start timeout or a 20-second utterance timeout stop the guide; partial recordings remain incomplete. The app never silently substitutes a completed visual-only test.
 
-## Selection and review
+Keep the page visible. Stopping early, hiding the page, or a timer interruption longer than 1.5 seconds ends the guide. Completed intervals remain available; unfinished phases remain incomplete. Analysis samples retain the phase at capture even if inference finishes later. Clock alignment is approximate, not hardware exposure timing.
 
-- **Method A:** selects a stable, checked window representative of the end of each completed hold. Whole-hold and tail coverage checks reject missing extreme-gaze evidence. Selection never prefers movement amplitude, a normal-looking position, or an expected score.
-- **Method B:** uses the complete recorded hold from `holdStart` to `end`. It does not crop tracking gaps, blinks, or missing tails to improve the result. The existing temporal rules assess evidence adequacy.
-- Instruction labels remain unchanged when the eyes do not move. Resting offset is preserved, and the patient's observed maximum is never normalized into a normal range.
+## Automatic A/B results
 
-After reviewing suspicious eye segments, inspect the selected phases and tap **Confirm phases**. Use **Adjust** to edit an A position or B boundary. Manual changes remain protected when tracking choices change; **Exam details → Restore automatic selections** explicitly resets them. Missing reliable A positions can remain unselected while B phase timing is confirmed. Inadequate evidence still produces abstention.
+- **A · Three positions:** selects a stable, checked window representative of the end of each completed hold. Whole-hold and tail coverage checks reject missing extreme-gaze evidence. Selection never favors movement amplitude or an expected score.
+- **B · Full holds:** analyzes each complete interval from `holdStart` to `end`. It does not crop missing extreme-gaze tails to improve the result.
+- Both eyes are tracked independently. Labels remain unchanged even if the eyes do not move. Resting offset is preserved; observed maximum movement is never normalized into a normal range.
 
-Phase confirmation concerns instruction labels and times only. It does not confirm tracking accuracy, patient cooperation, examination adequacy, or an NIHSS score. Changing selections, rerunning the video check, or changing review decisions invalidates confirmation. Older clips without recorded guide timing keep manual selection.
+After the local video check, new guided clips open **Eye motion** and show both automatic results. No **Confirm phases**, manual position selection, or method switching is required. Rest/Left/Right buttons only seek to recorded phases. Older videos without guide timing retain manual controls because instructions cannot safely be inferred from movement alone.
+
+`automatic-assessment.js` uses original checked tracks and excludes automatically flagged eye samples. It ignores clinician findings, manual phase changes and accepted replacements. Missing evidence produces abstention, never a normal score. The automatic result stays unchanged when a doctor changes a segment choice.
+
+Suspicious-segment review is optional for viewing automatic A/B results. Completing it enables a separate **Reviewed suggestion** and reviewed video exports. Independent clinician findings produce a separately identified **Examiner result**. These are not interchangeable with the automatic baseline. Reviewed exports still require segment decisions; original recordings remain downloadable. Eye-only playback leaves unreviewed suspicious eyes and unchecked samples blank.
 
 ## Data and validation
 
-Original recordings are retained. Review JSON schema `gaze-reviewed-motion-7` includes guide metadata, automatic proposals, supporting sample indices, manual selections and confirmation history. Eye-position corrections and clinical findings remain separate. No RL training, server upload or LLM is involved.
+Review JSON schema `gaze-reviewed-motion-8` contains original recording data, guide events and speech metadata, automatic evidence and selections, review choices, assisted evidence, and clinician-entered findings separately. Original samples are preserved. Historical guide-v1 clips are supported; no unlabeled video receives invented phase times. This release has no cloud upload, LLM, VLM or RL training. A third learned method has not been implemented.
 
-Automated tests cover phase timing, delayed inference, early stopping, missing tails, immobile/abnormal gaze, edit preservation, confirmation invalidation, exports and real Chrome recording. Mobile layouts are checked at 320–768 pixels. These checks establish software behavior, not clinical performance; physical iPhone/Safari validation remains outstanding.
+Tests cover speech callbacks, gesture activation, delayed speech and inference, interruptions, missing tails, immobile gaze, clinical-label isolation, export provenance and Chrome recording with synthetic camera input. Browser speech events are scripted in these tests. Mobile layout is checked down to 320 pixels. Physical iPhone/Safari audibility and clinical performance still need separate validation.
