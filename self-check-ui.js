@@ -1,12 +1,12 @@
-import {chooseSegment,segmentCsv,annotationQueue} from './segment-review.js?v=deferred17';
-import {createAnnotationPackage} from './annotation-package.js?v=deferred17';
-import {createSegmentPreview,createReviewedPlayer,makeReviewRenderer,reviewedVideoSize} from './segment-player.js?v=deferred17';
-import {createEyeMotionPlayer,makeEyeMotionRenderer,clipGazeSuggestion,reviewedSamples,EYE_VIDEO_SIZE} from './eye-motion.js?v=deferred17';
+import {chooseSegment,segmentCsv,annotationQueue} from './segment-review.js?v=window18';
+import {createAnnotationPackage} from './annotation-package.js?v=window18';
+import {createSegmentPreview,createReviewedPlayer,makeReviewRenderer,reviewedVideoSize} from './segment-player.js?v=window18';
+import {createEyeMotionPlayer,makeEyeMotionRenderer,clipGazeSuggestion,reviewedSamples,EYE_VIDEO_SIZE} from './eye-motion.js?v=window18';
 import {parseIntervals,NIHSS_SOURCE} from './assessment.js';
 import {recordingMime,extensionFor} from './recording.js';
 import {convertVideo} from './video-export.js';
-import {initializeSelectionReview,refreshAutomaticSelections,editSelection,clearSelections,confirmSelections} from './selection-review.js?v=deferred17';
-import {automaticGazeAssessment} from './automatic-assessment.js?v=deferred17';
+import {initializeSelectionReview,refreshAutomaticSelections,editSelection,clearSelections,confirmSelections} from './selection-review.js?v=window18';
+import {automaticGazeAssessment} from './automatic-assessment.js?v=window18';
 
 const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text)e.textContent=text;if(cls)e.className=cls;return e;};
 function field(text,options,value){
@@ -75,6 +75,7 @@ export function createSelfCheckUI({clip,clipNumber,retry,saveBlob,busyMessage=()
   }
   function updateResult(){
     if(!result)return;
+    const fixedWindow=clip.data.recording.guidedExam?.version==='guided-exam-v3';
     const selection=refreshAutomaticSelections(clip,clip.checkReport),r=clipGazeSuggestion(clip,clip.checkReport),automatic=automaticGazeAssessment(clip,clip.checkReport);result.replaceChildren();
     const title=r.score!==null?`NIHSS · ${r.score}`:r.pending?'NIHSS · Review needed':r.clinical?'NIHSS · Incomplete':r.threePositions||r.temporal?r.title:!r.evidence.adequate?'NIHSS · Not ready':r.candidates.length===1?'NIHSS · Possible 0':'NIHSS · Review 1–2';
     const short=r.pending?`Review ${r.pending} remaining segments.`:r.score!==null?'Based on examiner findings.':r.clinical?'Complete examiner findings.':r.temporal?(!r.temporal.adequate?r.temporal.issues[0]:'Temporal assessment · clinician confirmation needed.'):r.threePositions?(!r.threePositions.adequate?r.threePositions.issues[0]:'Three-position rule · clinician confirmation needed.'):!r.evidence.adequate?'Check exam phases and coverage.':'Clinician confirmation needed.';
@@ -82,7 +83,7 @@ export function createSelfCheckUI({clip,clipNumber,retry,saveBlob,busyMessage=()
       result.append(el('h4','Automatic comparison'));
       const comparison=el('table');comparison.className='position-values';comparison.setAttribute('aria-label','Automatic algorithm comparison');
       const header=el('tr');for(const text of ['Method','Result'])header.append(el('th',text));comparison.append(header);
-      for(const [key,name]of [['threePosition','A · Three positions'],['temporal','B · Full holds']]){
+      for(const [key,name]of [['threePosition','A · Three positions'],['temporal',fixedWindow?'B · Analysis window':'B · Full holds']]){
         const evidence=automatic.methods[key],outcome=!evidence.adequate?'Insufficient evidence':evidence.candidateScore===null?'Review 1–2':`Possible ${evidence.candidateScore}`;
         const row=el('tr');row.append(el('th',name),el('td',outcome));comparison.append(row);
       }
@@ -93,7 +94,7 @@ export function createSelfCheckUI({clip,clipNumber,retry,saveBlob,busyMessage=()
     phaseBox.hidden=!!selection||clip.gazeScoringMode!=='phases';methodInput.disabled=!!controller;methodInput.closest('label').hidden=!!selection;
     selectionBar.hidden=!selection;restoreAuto.hidden=true;
     if(selection){
-      selectionLabel.textContent='Phases recorded automatically';
+      selectionLabel.textContent=fixedWindow?'Analysis windows':'Phases recorded automatically';
       confirmButton.hidden=true;adjustButton.hidden=true;
       confirmButton.textContent=selection.status==='confirmed'?'Confirmed':'Confirm phases';
       confirmButton.disabled=!!controller||r.pending>0||selection.status==='confirmed';
@@ -122,11 +123,17 @@ export function createSelfCheckUI({clip,clipNumber,retry,saveBlob,busyMessage=()
     const list=el('ul');for(const reason of r.reasons)list.append(el('li',reason));more.append(list,el('p',r.limitation,'hint'),
       el('p','The diagram fixes eye width and removes the head image. Pose compensation is approximate; missing positions stay blank. Left/right refer to the subject.','hint'));
     if(selection){
-      more.append(el('p','Both eyes are identified by the tracker. Phase labels come from recorded instructions, even when the eyes do not move. No manual phase labels are needed. Prompt timing does not prove a complete clinical examination.','hint'));
-      if(selection.autoProposal.issues.length){const issues=el('ul');for(const issue of selection.autoProposal.issues)issues.append(el('li',issue));more.append(issues);}
+      more.append(el('p',fixedWindow?'Only the displayed central windows are assessed. Preparation, movement allowance and recording buffers are excluded. Directions follow the voice prompts, even without eye movement.':'Both eyes are identified by the tracker. Phase labels come from recorded instructions, even when the eyes do not move. No manual phase labels are needed. Prompt timing does not prove a complete clinical examination.','hint'));
+      if(!automatic&&selection.autoProposal.issues.length){const issues=el('ul');for(const issue of selection.autoProposal.issues)issues.append(el('li',issue));more.append(issues);}
     }
     if(automatic){more.append(el('p',automatic.limitation,'hint'));
       if(automatic.selection.issues.length){const issues=el('ul');for(const issue of automatic.selection.issues)issues.append(el('li',issue));more.append(issues);}}
+    const archive=clip.data.recording.selfCheckFrameCoverage;
+    for(const [phase,stats]of Object.entries(archive?.byPhase??{}))if(stats.skipped){
+      const name=phase==='center'?'Rest':phase==='left'?'Left':phase==='right'?'Right':'Recording';
+      const reasons=Object.keys(stats.skippedReasons??{}).map(reason=>reason.includes('byte-limit')?'image memory limit':reason==='encoder-busy'?'image saving was busy':'image saving failed');
+      more.append(el('p',`${name} review images: ${stats.saved} / ${stats.requested} saved (${[...new Set(reasons)].join(', ')}). Unsaved images are not evidence of an eye movement problem.`,'hint'));
+    }
     if(r.threePositions?.codes){
       const table=el('table');table.className='position-values';table.setAttribute('aria-label','Three-position eye codes');
       const header=el('tr');for(const text of ['Position','L eye','R eye'])header.append(el('th',text));table.append(header);
@@ -137,7 +144,7 @@ export function createSelfCheckUI({clip,clipNumber,retry,saveBlob,busyMessage=()
     }
     if(r.temporal&&Object.keys(r.temporal.phases).length){
       const table=el('table');table.className='position-values';table.setAttribute('aria-label','Temporal tracking evidence');
-      const header=el('tr');for(const text of ['Hold / eye','Usable','Stable'])header.append(el('th',text));table.append(header);
+      const header=el('tr');for(const text of [fixedWindow?'Window / eye':'Hold / eye','Usable','Stable'])header.append(el('th',text));table.append(header);
       for(const [key,label]of [['center','Rest'],['left','Left'],['right','Right']])for(const side of ['left','right']){
         const e=r.temporal.phases[key]?.[side];if(!e)continue;
         const row=el('tr');row.append(el('th',`${label} / ${side==='left'?'L':'R'}`),el('td',`${Math.round(e.coverage*100)}%`),el('td',`${e.holdSeconds.toFixed(2)} s`));table.append(row);
@@ -308,7 +315,7 @@ export function createSelfCheckUI({clip,clipNumber,retry,saveBlob,busyMessage=()
     if(disposed)return;const state=clip.checkState??'idle',busy=['queued','running'].includes(state),r=clip.checkReport;
     retryButton.hidden=busy||!!r;cancel.hidden=!busy;actions.hidden=retryButton.hidden&&cancel.hidden;status.hidden=!!r;
     status.textContent=state==='queued'?'Queued for analysis…':state==='running'?'Checking · '+(clip.checkProgress??'Loading model…'):
-      r?`${r.segments.length} eye segments · ${r.ignoredBlinkEyes} blink samples skipped${r.coverage.unchecked?' · Some frames unchecked':''}`:clip.checkError??'The clip is checked locally after recording.';
+      r?`${r.segments.length} eye segments · ${r.ignoredBlinkEyes} blink samples skipped${(r.coverage.assessmentUnchecked??r.coverage.unchecked)?' · Some analysis frames unchecked':''}`:clip.checkError??'The clip is checked locally after recording.';
     if(r&&builtReport!==r)build();
   }
   clip.checkEvents??=new EventTarget();clip.checkEvents.addEventListener('change',update);update();

@@ -1,10 +1,14 @@
 # Method B: temporal hold assessment
 
-Method B is an experimental alternative to Method A (three selected positions). It analyzes the complete labelled rest, subject-left and subject-right holds on the same reviewed, head-relative eye track. It is a deterministic rule system, not a trained classifier, reinforcement learning, or a validated NIHSS assessment.
+Method B is an experimental alternative to Method A (three selected positions). It analyzes labelled rest, subject-left and subject-right intervals on the same reviewed, head-relative eye track. It is a deterministic rule system, not a trained classifier, reinforcement learning, or a validated NIHSS assessment.
+
+## Fixed-window guided recordings (v3)
+
+For new guided v3 recordings, B evaluates the middle 2 seconds of the 4-second center hold and middle 4 seconds of each 8-second directional hold. Preparation, movement allowance and recording buffers are excluded before evidence is inspected. `fixedWindow:true` removes the extra settling deduction and disallows time cells whose endpoints lie outside the fixed window. Missing evidence within it still causes abstention. v1/v2 recordings and manually labelled legacy clips retain the full-hold behavior. See [guided recording](GUIDED_EXAM.md) for the exact timing and provenance.
 
 ## Use
 
-New [spoken guided recordings](GUIDED_EXAM.md) show **B · Full holds** alongside A automatically. Holds come from recorded instruction timing, including tracking gaps. Rest/Left/Right previews only seek; no phase confirmation is needed. Automatic analysis excludes flagged eyes and does not consume clinician feedback. Completing optional segment review adds a separate assisted suggestion. The app cannot verify cooperation or adequate targets. Rest is an initial observation, not calibration that resets gaze to zero.
+New [spoken guided recordings](GUIDED_EXAM.md) show **B · Analysis window** alongside A automatically. Windows come from recorded instruction timing and retain tracking gaps within them. Rest/Left/Right previews only seek; no phase confirmation is needed. Automatic analysis excludes flagged eyes and does not consume clinician feedback. Completing optional segment review adds a separate assisted suggestion. The app cannot verify cooperation or adequate targets. Rest is an initial observation, not calibration that resets gaze to zero.
 
 Older clips without guide timing retain manual **Start**/**End** controls and a method selector. Use one non-overlapping interval per direction, at least one second long, based on instructions rather than detected motion. **Details** shows coverage and original/reviewed evidence. New guided clips hide these manual controls. Incomplete recordings remain incomplete; repeat the exam rather than infer a missing instruction from eye movement.
 
@@ -32,6 +36,6 @@ Published video-gaze work also uses consecutive-frame evidence, including [Pibre
 
 ## Provenance and validation
 
-Review JSON schema `gaze-reviewed-motion-8` saves original samples, recorded speech and hold times, both automatic methods with quality exclusions, review choices and assisted evidence separately, plus selections, thresholds and supporting indices. Historical manual-selection provenance remains available for older clips. Source recordings and measurements are not overwritten. Nothing is uploaded.
+Review JSON schema `gaze-reviewed-motion-9` saves original samples, recorded speech, hold and analysis-window times, both automatic methods with quality exclusions, review choices and assisted evidence separately, plus selections, thresholds and supporting indices. Historical manual-selection provenance remains available for older clips. Source recordings and measurements are not overwritten. Nothing is uploaded.
 
 Automated synthetic fixtures cover different frame rates and cadence, spikes, sustained unilateral restriction, conjugate rest offset, missing extreme-position tails, long gaps, blinks, closure, head rejection, unchecked samples, timing errors, original-data preservation, accepted estimates and clinician-only score 2. Browser checks cover the English controls, method switching, shared timelines, exports and mobile widths from 320 to 768 pixels. These verify software behavior, not clinical accuracy. Physical iPhone/Safari testing and labelled-patient evaluation remain outstanding.

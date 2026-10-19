@@ -1,9 +1,11 @@
-import {ReviewArchive} from './review-archive.js';
+import {ReviewArchive} from './review-archive.js?v=window18';
 import {eyeUsable,eyeQualityLabel} from './eye-quality.js';
-import {GuidedExam,GuideSpeech} from './guided-exam.js?v=spoken16';
+import {GuidedExam,GuideSpeech,GUIDED_VERSION} from './guided-exam.js?v=window18';
 // All media stays in memory until the user downloads it. Detection frames are
 // copied BEFORE transfer to the worker; overlays never use a newer camera frame.
 export const RECORDING_SCHEMA='gaze-recording-1';
+const GUIDED_SAMPLE_RATE_HZ=20;
+const GUIDED_PHASE_BYTES=Object.freeze({center:8*1024*1024,left:20*1024*1024,right:20*1024*1024});
 export function recordingMime(Recorder=globalThis.MediaRecorder,format='auto') {
   if(!Recorder)return null;
   const types={mp4:['video/mp4;codecs=avc1.42E01E','video/mp4'],webm:['video/webm;codecs=vp8','video/webm;codecs=vp9','video/webm']};
@@ -74,8 +76,11 @@ export class GazeRecorder {
     const scale=Math.min(1,1280/video.videoWidth,960/video.videoHeight);
     const width=Math.round(video.videoWidth*scale/2)*2,frameHeight=Math.round(video.videoHeight*scale/2)*2;
     canvas.width=width;canvas.height=frameHeight+144;
+    const reviewWindowed=guided&&GUIDED_VERSION==='guided-exam-v3';
     const item={id:crypto.randomUUID(),canvas,frameHeight,width,metadata:structuredClone(metadata),
-      startedAt:new Date().toISOString(),phase,frames:[],events:[],errors:[],bytes:0,stopping:false,reviewArchive:new ReviewArchive()};
+      startedAt:new Date().toISOString(),phase,frames:[],events:[],errors:[],bytes:0,stopping:false,
+      reviewWindowed,sampleRateLimitHz:reviewWindowed?GUIDED_SAMPLE_RATE_HZ:null,lastSampleTime:null,
+      reviewArchive:new ReviewArchive(48*1024*1024,{phaseQuotas:reviewWindowed?GUIDED_PHASE_BYTES:null})};
     this.current=item;
     const onBytes=n=>{item.bytes+=n;if(item.bytes>256*1024*1024)this.stop('size-limit');};
     const onError=message=>{item.errors.push(message);this.onError(message);this.stop('encoder-error');};
@@ -120,7 +125,13 @@ export class GazeRecorder {
     }
   }
 
-  wantsFrame(t){return this.active && t>=this.current.startSessionTime;}
+  wantsFrame(t){
+    const item=this.current;
+    if(!this.active||!Number.isFinite(t)||t<item.startSessionTime)return false;
+    // Select the sample and its image together. Archiving every Nth image while
+    // retaining every sample would break adjacent checked-frame coverage.
+    return !item.sampleRateLimitHz||item.lastSampleTime===null||t-item.lastSampleTime>=1/item.sampleRateLimitHz-1e-9;
+  }
 
   capturePhase(sessionTime){
     const item=this.current;
@@ -133,7 +144,7 @@ export class GazeRecorder {
   addFrame(image,sample,id) {
     try{
       const item=this.current;
-      if(!image || !this.active || id!==item.id || sample.t<item.startSessionTime)return;
+      if(!image || !this.wantsFrame(sample.t) || id!==item.id)return;
       const renderedAt=performance.now();
       const frame={...structuredClone(sample),
         recordingTimeSeconds:sample.t-item.startSessionTime,
@@ -141,12 +152,17 @@ export class GazeRecorder {
         rawVideoTimeSeconds:sample.t-item.startSessionTime-(item.rawStartedPerf-item.startedPerf)/1000};
       if(frame.rawVideoTimeSeconds<0)return;
       if(item.guide){const stage=this.capturePhase(sample.t);frame.phase=stage.phase;frame.phaseStart=stage.phaseStart;}
-      item.reviewArchive.add(image,item.frames.length);
+      if(item.reviewWindowed){
+        const window=item.guide.analysisAt(frame.rawVideoTimeSeconds);
+        frame.reviewScope=window?'analysis':'buffer';
+        if(window)item.reviewArchive.add(image,item.frames.length,window.phase);
+      }else item.reviewArchive.add(image,item.frames.length,frame.phase??'unlabelled');
       item.ctx.drawImage(image,0,144,item.width,item.frameHeight);
       item.ctx.save();item.ctx.translate(0,144);
       drawEyeMarkers(item.ctx,sample,item.width,item.frameHeight);item.ctx.restore();
       this.drawHud(item,frame,frame.analysisVideoTimeSeconds);
       item.frames.push(frame);
+      item.lastSampleTime=sample.t;
     }finally{image?.close();}
   }
 
@@ -187,6 +203,11 @@ export class GazeRecorder {
       rawStartsAfterAnalysisSeconds:(item.rawStartedPerf-item.startedPerf)/1000,
       analysisWidth:item.canvas.width,analysisHeight:item.canvas.height,analysisFrameHeight:item.frameHeight,analysisFrameOffsetY:144,
       rawInputMirrored:item.metadata.source.inputMirrored??false,analysisMirrored:false,audio:false,
+      sampleRateLimitHz:item.sampleRateLimitHz,
+      reviewArchivePolicy:{strategy:item.reviewWindowed?'fixed-analysis-windows':'all-recorded-samples',
+        phaseBudgetsBytes:item.reviewWindowed?{...GUIDED_PHASE_BYTES}:null,limitBytes:item.reviewArchive.limit,
+        maximumImageSide:1280,jpegQuality:.94,
+        sampling:'Recorded samples and their source images are selected together. Live tracking and raw video are not rate-limited by this policy.'},
       guidedExam,
       timing:'Capture and canvas-presentation times share a monotonic browser clock. Video offsets are estimates, not hardware/encoder frame timestamps. Analysis frames are held between detections; raw video preserves camera motion.'},
       samples:item.frames,events:item.events,errors:item.errors};
@@ -194,7 +215,10 @@ export class GazeRecorder {
     this.finishing=Promise.all([item.analysis.done,item.raw.done,item.reviewArchive.finish()]).then(([analysis,raw,reviewFrames])=>{
       data.recording.analysisMime=analysis.blob.type;data.recording.rawMime=raw.blob.type;
       if(!analysis.blob.size||!raw.blob.size)data.errors.push('Empty media: recording may have ended before a video frame was encoded.');
-      data.recording.selfCheckFrameCoverage={saved:reviewFrames.length,total:item.frames.length,skipped:item.reviewArchive.skipped};
+      const archiveStats=item.reviewArchive.summary();
+      data.recording.selfCheckFrameCoverage={...archiveStats,total:item.frames.length,required:archiveStats.requested,
+        bufferSamples:item.reviewWindowed?item.frames.filter(frame=>frame.reviewScope==='buffer').length:0,
+        strategy:data.recording.reviewArchivePolicy.strategy};
       const clip={data,analysis:analysis.blob,raw:raw.blob,reviewFrames};
       this.onClip(clip);return clip;
     }).catch(error=>{this.onError(error.message);return null;}).finally(()=>{

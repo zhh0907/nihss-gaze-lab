@@ -1,4 +1,4 @@
-import {SEGMENT_VERSION,SIDES,LIMITS,buildSegmentReview} from './segment-review.js?v=deferred17';
+import {SEGMENT_VERSION,SIDES,LIMITS,buildSegmentReview} from './segment-review.js?v=window18';
 import {eyeEvidence} from './eye-image-evidence.js?v=segment8';
 import {bitmapWithDeadline} from './frame-capture.js';
 
@@ -24,7 +24,9 @@ export async function runSelfCheck(clip,{signal,onProgress=()=>{}}={}) {
   const report={schema:'gaze-segment-review-3',version:SEGMENT_VERSION,createdAt:new Date().toISOString(),sourceRecordingId:clip.data.recording.id,
     clinicalUse:false,originalDataModified:false,method:'Whole-run bidirectional iris-candidate fitting in head-relative coordinates',limits:LIMITS,
     limitations:['Experimental visible-iris ellipse evidence can fail on reflections, eyelashes or light irises.','Short stable bridges are estimates; hidden motion cannot be excluded.','Blinks require closure, a high blink score and reopening within 650 ms; sustained occlusion is retained.','No automatic NIHSS rescore.','Only archived analysis frames are checked; unarchived intervals remain untouched.'],
-    frames:[],coverage:{checked:0,total:clip.data.samples.length,unchecked:clip.data.samples.length},reviewer:''};
+    frames:[],coverage:{checked:0,total:clip.data.samples.length,unchecked:clip.data.samples.length,
+      assessmentTotal:clip.data.samples.filter(s=>s.reviewScope!=='buffer').length,
+      outsideAnalysis:clip.data.samples.filter(s=>s.reviewScope==='buffer').length},reviewer:''};
   const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d',{willReadFrequently:true});
   try{
     onProgress(0,archive.length);await request({type:'init'});
@@ -44,6 +46,7 @@ export async function runSelfCheck(clip,{signal,onProgress=()=>{}}={}) {
       await new Promise(resolve=>setTimeout(resolve,0));
     }
     report.coverage.checked=report.frames.length;report.coverage.unchecked=report.coverage.total-report.frames.length;
+    report.coverage.assessmentUnchecked=Math.max(0,report.coverage.assessmentTotal-report.frames.length);
     onProgress('Fitting tracks',archive.length);
     return buildSegmentReview(report);
   }finally{signal?.removeEventListener('abort',abort);worker.terminate();}

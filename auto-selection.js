@@ -1,7 +1,7 @@
 import {eyeUsable} from './eye-quality.js';
 import {percentile} from './geometry.js';
 import {THREE_POSITION_RULES,threePositionEvidence} from './three-position.js';
-import {TEMPORAL_RULES} from './temporal-gaze.js';
+import {TEMPORAL_RULES} from './temporal-gaze.js?v=window18';
 
 // Selection uses recorded instructions, never a direction inferred from eye motion.
 // These conservative engineering checks do not establish normal eye movement.
@@ -44,12 +44,20 @@ function phaseQuality(samples,checked,start,end){
     sourceIndices:[...new Set(cells.flatMap(c=>c.sourceIndices))]};
 }
 
-function selectAnchor(samples,checked,phase,quality){
+// Mask indices rather than deleting rows, preserving the original source indices
+// and timestamp gaps. Adjacent buffer samples cannot supply boundary evidence.
+export function checkedWithinAnalysisWindows(samples,checked,windows){
+  const ranges=Object.values(windows??{}).filter(r=>Number.isFinite(r?.start)&&Number.isFinite(r?.end)&&r.end>r.start);
+  return new Set([...checked].filter(index=>Number.isFinite(samples[index]?.rawVideoTimeSeconds)&&
+    ranges.some(r=>samples[index].rawVideoTimeSeconds>=r.start-EPS&&samples[index].rawVideoTimeSeconds<=r.end+EPS)));
+}
+
+function selectAnchor(samples,checked,phase,quality,analysisStart,analysisEnd,fixedWindow=false){
   const radius=THREE_POSITION_RULES.radius,cfg=AUTO_SELECTION_RULES,key=keyFor(phase.phase);
-  const start=phase.holdStart+radius,end=phase.end-radius-EPS;
+  const start=analysisStart+radius,end=analysisEnd-radius-EPS;
   let last=-Infinity,best=null,evaluated=0;
-  for(const sample of samples){
-    const time=sample.rawVideoTimeSeconds;
+  const candidates=fixedWindow?[(analysisStart+analysisEnd)/2]:samples.map(sample=>sample.rawVideoTimeSeconds);
+  for(const time of candidates){
     if(time<start-EPS||time>end+EPS||time-last<cfg.candidateSpacing-EPS)continue;
     last=time;evaluated++;
     const evidence=threePositionEvidence(samples,{[key]:time},checked).positions[key];
@@ -58,7 +66,8 @@ function selectAnchor(samples,checked,phase,quality){
     const tailDistance=Math.max(...SIDES.map(side=>Math.abs(evidence[side].median-quality.tailMedian[side])));
     if(tailDistance>cfg.representativeTolerance+EPS)continue;
     const spread=Math.max(...SIDES.map(side=>evidence[side].high-evidence[side].low));
-    // Prefer observed, endpoint-representative, stable windows. Resolve ties late.
+    // Legacy clips choose an endpoint-representative stable window. V3 evaluates
+    // exactly one predetermined midpoint, so quality can reject but never move it.
     const rank=[evidence.estimated/Math.max(1,evidence.count*2),tailDistance,spread,-time];
     const preferable=!best||rank.some((value,i)=>value<best.rank[i]-EPS&&rank.slice(0,i).every((v,j)=>Math.abs(v-best.rank[j])<=EPS));
     if(preferable)best={time,evidence,rank};
@@ -72,9 +81,11 @@ export function proposeAutoSelections(samples=[],checkedIndices=new Set(samples.
       guidedVersion:guidedExam?.version??null,guidedStatus:guidedExam?.status??null,
       thresholds:{...AUTO_SELECTION_RULES},phases:{},requiresConfirmation:false,
       note:'Recorded instruction labels are retained even when the eyes do not move. No amplitude normalization or reflex inference is performed.'}};
-  if(!guidedExam||!['guided-exam-v1','guided-exam-v2'].includes(guidedExam.version)||!Array.isArray(guidedExam.intervals)){
+  if(!guidedExam||!['guided-exam-v1','guided-exam-v2','guided-exam-v3'].includes(guidedExam.version)||!Array.isArray(guidedExam.intervals)){
     result.issues.push('This clip has no recorded guided-exam timings. Mark the task phases manually.');return result;
   }
+  const fixedWindow=guidedExam.version==='guided-exam-v3';
+  result.provenance.analysisWindowStrategy=fixedWindow?'Fixed recorded analysis window; never shifted or shortened by tracking quality or eye movement.':'Legacy full recorded hold.';
   const phases=guidedExam.intervals.filter(r=>PHASES.includes(r?.phase));
   if(PHASES.some(p=>phases.filter(r=>r.phase===p).length>1)){
     result.issues.push('The recorded phase labels are repeated. Review the intervals manually.');return result;
@@ -92,17 +103,35 @@ export function proposeAutoSelections(samples=[],checkedIndices=new Set(samples.
     result.issues.push('The recorded prompt intervals overlap. Review the intervals manually.');return result;
   }
   for(const phase of PHASES){
-    const interval=completed.find(r=>r.phase===phase),provenance=result.provenance.phases[phase]={completed:!!interval};
+    const recorded=phases.find(r=>r.phase===phase),interval=completed.find(r=>r.phase===phase);
+    const provenance=result.provenance.phases[phase]={completed:!!interval,recordedPhase:recorded?structuredClone(recorded):null};
     if(!interval){result.issues.push(`${labelFor(phase)} was not completed. Record a new exam.`);continue;}
-    // B keeps the full instructed hold, including any missing tail or blink.
-    result.temporalSelection[phase]={start:interval.holdStart,end:interval.end};
     Object.assign(provenance,{promptStart:interval.start,holdStart:interval.holdStart,end:interval.end,
-      temporalSelection:'Full recorded hold; missing samples do not shorten the interval.'});
+      recordedHold:{start:interval.holdStart,end:interval.end},strategy:fixedWindow?'fixed-recorded-analysis-window':'legacy-full-recorded-hold'});
+    if(fixedWindow&&(![interval.analysisStart,interval.analysisEnd].every(Number.isFinite)||
+      interval.analysisStart<interval.holdStart||interval.analysisEnd<=interval.analysisStart||interval.analysisEnd>interval.end)){
+      provenance.analysisWindow=null;provenance.validAnalysisWindow=false;
+      result.issues.push(`${labelFor(phase)}: the recorded analysis window is missing or invalid. No full-hold fallback was used.`);continue;
+    }
+    const analysisStart=fixedWindow?interval.analysisStart:interval.holdStart,analysisEnd=fixedWindow?interval.analysisEnd:interval.end;
+    // Fixed v3 windows include every missing sample inside them. Their external
+    // buffers are excluded by recorded timing, never by the observed eye motion.
+    result.temporalSelection[phase]={start:analysisStart,end:analysisEnd};
+    Object.assign(provenance,{analysisWindow:{start:analysisStart,end:analysisEnd},validAnalysisWindow:true,
+      excludedBufferSeconds:{before:analysisStart-interval.holdStart,after:interval.end-analysisEnd,
+        total:analysisStart-interval.holdStart+interval.end-analysisEnd},
+      endpointReference:fixedWindow?'End of the fixed analysis window':'End of the recorded hold',
+      anchorStrategy:fixedWindow?'Fixed analysis-window midpoint; no search or relocation.':'Legacy stable, endpoint-representative window search.',
+      requestedAnchor:fixedWindow?(analysisStart+analysisEnd)/2:null,
+      temporalSelection:fixedWindow?'Full fixed analysis window; missing samples do not shorten or move it.':'Full recorded hold; missing samples do not shorten the interval.'});
     if(!validTimeline)continue;
-    const quality=phaseQuality(samples,checkedIndices,interval.holdStart,interval.end);provenance.quality=quality;
+    const checked=fixedWindow?checkedWithinAnalysisWindows(samples,checkedIndices,{[phase]:result.temporalSelection[phase]}):checkedIndices;
+    const quality=phaseQuality(samples,checked,analysisStart,analysisEnd);provenance.quality=quality;
     if(!quality.adequate){result.issues.push(...quality.issues.map(s=>`${labelFor(phase)}: ${s}`));continue;}
-    const anchor=selectAnchor(samples,checkedIndices,interval,quality);provenance.candidateWindows=anchor.evaluated;
-    if(!anchor.selected){result.issues.push(`${labelFor(phase)}: no stable, checked window represents the end of the hold. A cannot assess this phase.`);continue;}
+    const anchor=selectAnchor(samples,checked,interval,quality,analysisStart,analysisEnd,fixedWindow);provenance.candidateWindows=anchor.evaluated;
+    if(!anchor.selected){result.issues.push(fixedWindow?
+      `${labelFor(phase)}: the fixed midpoint is not stable, checked and representative of the analysis-window endpoint. A cannot assess this phase; the anchor was not moved.`:
+      `${labelFor(phase)}: no stable, checked window represents the end of the hold. A cannot assess this phase.`);continue;}
     result.threePositionSelection[keyFor(phase)]=anchor.selected.time;
     provenance.selectedPosition=anchor.selected;
   }

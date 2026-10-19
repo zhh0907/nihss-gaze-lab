@@ -1,6 +1,6 @@
 import {eyeUsable} from './eye-quality.js';
 
-export const SEGMENT_VERSION='deferred17';
+export const SEGMENT_VERSION='window18';
 export const SIDES=['left','right'];
 export const LIMITS=Object.freeze({maxGap:.25,mergeGap:.30,maxBridge:.25,maxPartialSpan:1.6,minSupport:.64,minMargin:.025});
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
@@ -188,6 +188,7 @@ export function selectedFrame(sample,review,version='selected'){
   const out=structuredClone(sample);out.reviewKinds={};
   for(const side of SIDES){
     const e=review?.[side];out.reviewKinds[side]='original';
+    if(version==='selected'&&sample.reviewScope==='buffer'){out[side]=null;out.reviewKinds[side]='buffer';continue;}
     if(e?.ignored){out[side]=null;out.reviewKinds[side]='blink';continue;}
     if(version==='selected'&&['closed','not-visible'].includes(e?.decision)){
       out[side]=null;out.reviewKinds[side]=e.decision;continue;

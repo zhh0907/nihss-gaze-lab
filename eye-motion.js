@@ -1,8 +1,8 @@
-import {selectedFrame,sampleAtTime} from './segment-review.js?v=deferred17';
+import {selectedFrame,sampleAtTime} from './segment-review.js?v=window18';
 import {summarize,scoreNIHSS,phaseAt,NIHSS_SOURCE} from './assessment.js';
 import {eyeUsable} from './eye-quality.js';
 import {threePositionEvidence} from './three-position.js?v=three13';
-import {temporalGazeEvidence} from './temporal-gaze.js?v=temporal14';
+import {temporalGazeEvidence} from './temporal-gaze.js?v=window18';
 
 export const EYE_VIDEO_SIZE=Object.freeze({width:960,height:300});
 
@@ -18,7 +18,8 @@ export function reviewedSamples(clip,report,version='selected'){
         // marked it valid. Do not present unchecked or unresolved points as
         // observed evidence in the default animation. Original comparison data
         // remains available, and explicit examiner choices keep their meaning.
-        if(!review){out[side]=null;out.reviewKinds[side]='unchecked';}
+        if(s.reviewScope==='buffer'){out[side]=null;out.reviewKinds[side]='buffer';}
+        else if(!review){out[side]=null;out.reviewKinds[side]='unchecked';}
         else if(!eyeReview?.ignored&&eyeReview?.flagged&&(!eyeReview.decision||eyeReview.decision==='unreviewed')){
           out[side]=null;out.reviewKinds[side]='unresolved';
         }
@@ -37,7 +38,7 @@ export function eyeDiagramState(sample){
   return Object.fromEntries(['right','left'].map(side=>{
     const kind=sample?.reviewKinds?.[side]??'original',usable=eyeUsable(sample,side);
     return [side,{position:usable?sample[side].corrected:null,kind,
-      label:kind==='closed'?'Eye closed':kind==='not-visible'?'Not visible':kind==='deferred'?'Needs annotation':kind==='blink'?'Blink':kind==='unresolved'?'Unresolved':kind==='unchecked'?'Not checked':!usable?'No measurement':kind==='estimated'?'Accepted estimate':'Observed'}];
+      label:kind==='buffer'?'Outside analysis':kind==='closed'?'Eye closed':kind==='not-visible'?'Not visible':kind==='deferred'?'Needs annotation':kind==='blink'?'Blink':kind==='unresolved'?'Unresolved':kind==='unchecked'?'Not checked':!usable?'No measurement':kind==='estimated'?'Accepted estimate':'Observed'}];
   }));
 }
 
@@ -60,8 +61,17 @@ function evidenceReasons(evidence){
 // NIHSS labels. Exact rule mapping requires separately entered clinical facts.
 export function clipGazeSuggestion(clip,report){
   const checked=new Set(report.frames.map(f=>f.sourceIndex));
+  const fixedWindow=clip.data.recording.guidedExam?.version==='guided-exam-v3';
+  const windows=fixedWindow?Object.entries(clip.temporalSelection??{}).map(([phase,r])=>({phase,...r})):[];
   // Archive gaps are not implicitly approved measurements for a new score.
-  const assess=rows=>summarize(rows.map((s,i)=>checked.has(i)?s:{...s,left:null,right:null,valid:false}),clip.data.config);
+  const assess=rows=>summarize(rows.map((s,i)=>{
+    const out=checked.has(i)?{...s}:{...s,left:null,right:null,valid:false};
+    if(fixedWindow){
+      const range=windows.find(r=>s.rawVideoTimeSeconds>=r.start&&s.rawVideoTimeSeconds<=r.end);
+      out.phase=range?.phase??'unlabelled';out.phaseStart=range?s.t-s.rawVideoTimeSeconds+range.start:0;
+    }
+    return out;
+  }),fixedWindow?{...clip.data.config,settleSeconds:0}:clip.data.config);
   const samples=reviewedSamples(clip,report),evidence=assess(samples),original=assess(reviewedSamples(clip,report,'original'));
   const pending=report.segments.filter(s=>s.decision==='unreviewed').length;
   const estimated=samples.reduce((n,s)=>n+['left','right'].filter(side=>s.reviewKinds[side]==='estimated').length,0);
@@ -77,8 +87,8 @@ export function clipGazeSuggestion(clip,report){
   result.methods={
     threePosition:{selected:threePositionEvidence(samples,clip.threePositionSelection??{},checked),
       original:threePositionEvidence(originalSamples,clip.threePositionSelection??{},checked)},
-    temporal:{selected:temporalGazeEvidence(samples,clip.temporalSelection??{},checked,clip.data.recording.durationSeconds),
-      original:temporalGazeEvidence(originalSamples,clip.temporalSelection??{},checked,clip.data.recording.durationSeconds)},
+    temporal:{selected:temporalGazeEvidence(samples,clip.temporalSelection??{},checked,clip.data.recording.durationSeconds,{fixedWindow}),
+      original:temporalGazeEvidence(originalSamples,clip.temporalSelection??{},checked,clip.data.recording.durationSeconds,{fixedWindow})},
   };
   if(clip.gazeScoringMode==='three-position'){
     result.threePositions=result.methods.threePosition.selected;result.originalThreePositions=result.methods.threePosition.original;
@@ -110,7 +120,7 @@ export function clipGazeSuggestion(clip,report){
       result.reasons.push('Accepted replacements changed the temporal evidence. Compare the original tracking.');
     const estimatedSeconds=Object.values(p.phases).reduce((n,f)=>n+['left','right'].reduce((m,s)=>m+(f[s]?.estimatedSeconds??0),0),0);
     if(estimatedSeconds)result.reasons.push(`${estimatedSeconds.toFixed(2)} eye-seconds include accepted estimates; these are not independent observations.`);
-    result.limitation='Experimental time-weighted hold assessment. Position and duration thresholds need clinical validation. Resting offset is preserved. No learned model or RL update is involved.';
+    result.limitation=fixedWindow?'Experimental assessment of fixed central windows. Preparation and recording buffers are excluded; missing tracking within the window remains missing. Thresholds need clinical validation. No model update is involved.':'Experimental time-weighted hold assessment. Position and duration thresholds need clinical validation. Resting offset is preserved. No learned model or RL update is involved.';
     return result;
   }
   if(result.threePositions){

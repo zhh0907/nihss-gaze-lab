@@ -1,14 +1,20 @@
 // Spoken horizontal eye-movement acquisition for NIHSS Best Gaze research.
 // This is not a complete clinical examination or an autonomous NIHSS score.
-export const GUIDED_VERSION='guided-exam-v2';
+export const GUIDED_VERSION='guided-exam-v3';
+export const ANALYSIS_WINDOWS=Object.freeze({
+  center:Object.freeze({startOffset:1,endOffset:3}),
+  left:Object.freeze({startOffset:2,endOffset:6}),
+  right:Object.freeze({startOffset:2,endOffset:6}),
+});
 export const GUIDED_STEPS=Object.freeze([
-  {phase:'unlabelled',kind:'prepare',seconds:3,title:'NIHSS · Best gaze',hint:'Keep your head still if comfortable.',speech:'NIH Stroke Scale eye movement test. Keep your head still if comfortable.'},
+  {phase:'unlabelled',kind:'prepare',seconds:.5,title:'NIHSS · Best gaze',hint:'Keep your head still if comfortable.',speech:'Eye movement test. Follow the voice.'},
   {phase:'center',kind:'move',seconds:1,title:'Look straight ahead',hint:'Look toward the camera.',speech:'Look straight ahead.'},
-  {phase:'center',kind:'hold',seconds:3,title:'Look straight ahead',hint:'Hold your gaze.'},
+  {phase:'center',kind:'hold',seconds:4,title:'Look straight ahead',hint:'Hold your gaze.'},
   {phase:'left',kind:'move',seconds:2,title:'Look all the way left',hint:'Your left · As far as comfortable.',speech:'Look as far as comfortable to your left.'},
-  {phase:'left',kind:'hold',seconds:3,title:'Look all the way left',hint:'Hold your gaze.'},
+  {phase:'left',kind:'hold',seconds:8,title:'Look all the way left',hint:'Hold your gaze.'},
   {phase:'right',kind:'move',seconds:2,title:'Look all the way right',hint:'Your right · As far as comfortable.',speech:'Look as far as comfortable to your right.'},
-  {phase:'right',kind:'hold',seconds:3,title:'Look all the way right',hint:'Hold your gaze.'},
+  {phase:'right',kind:'hold',seconds:8,title:'Look all the way right',hint:'Hold your gaze.'},
+  {phase:'unlabelled',kind:'finish',seconds:2,title:'Finishing recording',hint:'You can relax.'},
 ]);
 
 // Keep the utterance alive until completion. Start the first cue in the same
@@ -56,8 +62,13 @@ export class GuidedExam {
   time(now){return Math.max(0,(now-this.originPerf)/1000);}
   beginStep(now){
     const step=GUIDED_STEPS[this.index],time=this.time(now);this.stepStartedPerf=now;
-    if(step.kind==='move')this.intervals.push({phase:step.phase,start:time,holdStart:null,end:null,completed:false});
-    if(step.kind==='hold')this.intervals.at(-1).holdStart=time;
+    if(step.kind==='move')this.intervals.push({phase:step.phase,start:time,holdStart:null,end:null,completed:false,analysisStart:null,analysisEnd:null});
+    if(step.kind==='hold'){
+      const interval=this.intervals.at(-1),window=ANALYSIS_WINDOWS[step.phase];interval.holdStart=time;
+      // Fixed before seeing any eye evidence. Timer jitter, tracking quality or
+      // lack of eye movement cannot move this window to a more convenient time.
+      interval.analysisStart=time+window.startOffset;interval.analysisEnd=time+window.endOffset;
+    }
     this.events.push({type:'prompt',phase:step.phase,kind:step.kind,time,title:step.title});
     this.onPrompt({...this.view(now),announce:true,speech:step.speech??null});
   }
@@ -123,6 +134,12 @@ export class GuidedExam {
     const interval=this.intervals.find(r=>rawTime>=r.start&&(r.end===null||rawTime<r.end));
     return interval?{phase:interval.phase,phaseStart:interval.start}:{phase:'unlabelled',phaseStart:0};
   }
+  analysisAt(rawTime){
+    if(!Number.isFinite(rawTime))return null;
+    const interval=this.intervals.find(r=>Number.isFinite(r.analysisStart)&&Number.isFinite(r.analysisEnd)&&
+      rawTime>=r.analysisStart&&rawTime<=r.analysisEnd&&(r.end===null||rawTime<=r.end));
+    return interval?{phase:interval.phase,analysisStart:interval.analysisStart,analysisEnd:interval.analysisEnd}:null;
+  }
   finish(now,reason='stopped'){
     if(this.status==='running'){
       const end=Math.max(this.time(this.lastTick),this.time(now)),active=this.intervals.at(-1);
@@ -132,9 +149,12 @@ export class GuidedExam {
     this.speaker?.cancel();
     return structuredClone({version:GUIDED_VERSION,protocol:'NIHSS Best Gaze horizontal acquisition',status:this.status,intervals:this.intervals,events:this.events,
       endedAt:this.endedAt,directions:'Subject-left and subject-right; independent of camera mirroring.',
+      analysisPolicy:{strategy:'fixed-central-window',windows:ANALYSIS_WINDOWS,
+        selectedBy:'Recorded speech and hold timing only; never tracking quality or inferred eye movement.',
+        finalBufferSeconds:2,excludeRecordingBuffers:true},
       speech:{requested:!!this.speaker,started:this.events.filter(e=>e.type==='speech-start').length,finished:this.events.filter(e=>e.type==='speech-end').length,
         confirmation:'Browser speech events only; audibility, patient hearing and task understanding are not verified.'},
-      timing:this.speaker?'Actual browser speech-start events relative to raw recording start; movement allowance begins after speech-end; holdStart marks the displayed hold cue. Queued cues are unlabelled.':'Actual on-screen prompt times relative to raw recording start; holdStart marks the displayed hold cue. Visual-only acquisition.',
+      timing:this.speaker?'Actual browser speech-start events relative to raw recording start; movement allowance begins after speech-end; holdStart marks the displayed hold cue. analysisStart/analysisEnd fix the central assessment window. Queued cues and the final recording buffer are unlabelled.':'Actual on-screen prompt times relative to raw recording start; holdStart marks the displayed hold cue; analysisStart/analysisEnd fix the central assessment window. Visual-only acquisition.',
       note:'Prompt timing does not prove cooperation, full excursion, adequate examination or a clinical score.'});
   }
 }

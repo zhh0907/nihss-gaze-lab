@@ -26,10 +26,11 @@ function longestRun(cells,test){
   }
   return best;
 }
-function eyeEvidence(samples,checked,side,start,end,direction,cfg){
+function eyeEvidence(samples,checked,side,start,end,direction,cfg,fixedWindow=false){
   const cells=[],indices=new Set();let blinkCount=0,estimatedCount=0;
   for(let i=1;i<samples.length;i++){
     const a=samples[i-1],b=samples[i],ta=a.rawVideoTimeSeconds,tb=b.rawVideoTimeSeconds;
+    if(fixedWindow&&(ta<start-EPS||tb>end+EPS))continue;
     const lo=Math.max(start,ta),hi=Math.min(end,tb);
     if(hi<=lo)continue;
     if(['blink','closed'].includes(b.reviewKinds?.[side]))blinkCount++;
@@ -67,9 +68,12 @@ function eyeEvidence(samples,checked,side,start,end,direction,cfg){
     estimatedCells:estimatedCount,estimatedSeconds:cells.filter(c=>c.estimated).reduce((n,c)=>n+c.end-c.start,0),blinkOrClosedSamples:blinkCount};
 }
 
-export function temporalGazeEvidence(samples,selection={},checkedIndices=new Set(samples.map((_,i)=>i)),duration){
+export function temporalGazeEvidence(samples,selection={},checkedIndices=new Set(samples.map((_,i)=>i)),duration,options={fixedWindow:false}){
+  const fixedWindow=options?.fixedWindow===true,settleSeconds=fixedWindow?0:TEMPORAL_RULES.settleSeconds;
   const cfg=TEMPORAL_RULES,result={version:'temporal-holds-v1',adequate:false,candidateScore:null,candidates:[],
-    issues:[],reasons:[],flags:[],phases:{},excursions:{},thresholds:{...cfg},intervals:[],
+    issues:[],reasons:[],flags:[],phases:{},excursions:{},thresholds:{...cfg,settleSeconds},intervals:[],
+    fixedWindow,appliedSettleSeconds:settleSeconds,
+    windowStrategy:fixedWindow?'Full fixed analysis window; no additional settling trim; both sample endpoints must be inside it.':'Legacy interval with settling time removed.',
     note:'Experimental movement evidence. Directions must be labelled from the instructed task, not inferred from the measured movement.'};
   if(samples.some((s,i)=>!Number.isFinite(s.rawVideoTimeSeconds)||s.rawVideoTimeSeconds<0||
     (i>0&&s.rawVideoTimeSeconds<=samples[i-1].rawVideoTimeSeconds))){
@@ -79,16 +83,16 @@ export function temporalGazeEvidence(samples,selection={},checkedIndices=new Set
     const r=selection[phase];
     if(!Number.isFinite(r?.start)||!Number.isFinite(r?.end))result.issues.push(`Mark the start and end of ${label(phase).toLowerCase()}.`);
     else if(r.start<0||r.end<=r.start||Number.isFinite(duration)&&r.end>duration+EPS)result.issues.push(`${label(phase)}: choose an ordered interval within this clip.`);
-    else if(r.end-r.start<cfg.settleSeconds+cfg.minValidSeconds-EPS)result.issues.push(`${label(phase)}: select a hold of at least ${(cfg.settleSeconds+cfg.minValidSeconds).toFixed(2)} s.`);
+    else if(r.end-r.start<settleSeconds+cfg.minValidSeconds-EPS)result.issues.push(`${label(phase)}: select a hold of at least ${(settleSeconds+cfg.minValidSeconds).toFixed(2)} s.`);
     else result.intervals.push({phase,start:r.start,end:r.end});
   }
   result.intervals.sort((a,b)=>a.start-b.start);
   if(result.intervals.some((r,i)=>i&&r.start<result.intervals[i-1].end-EPS))result.issues.push('The three hold intervals must not overlap.');
   if(result.issues.length)return result;
   for(const r of result.intervals){
-    const phase=result.phases[r.phase]={start:r.start,end:r.end,analysisStart:r.start+cfg.settleSeconds};
+    const phase=result.phases[r.phase]={start:r.start,end:r.end,analysisStart:r.start+settleSeconds,analysisEnd:r.end};
     for(const side of SIDES){
-      phase[side]=eyeEvidence(samples,checkedIndices,side,phase.analysisStart,r.end,r.phase==='center'?0:r.phase==='left'?1:-1,cfg);
+      phase[side]=eyeEvidence(samples,checkedIndices,side,phase.analysisStart,r.end,r.phase==='center'?0:r.phase==='left'?1:-1,cfg,fixedWindow);
       for(const issue of phase[side].issues)result.issues.push(`${label(r.phase)}, ${side} eye: ${issue}.`);
     }
   }
