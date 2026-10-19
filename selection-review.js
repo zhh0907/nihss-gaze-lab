@@ -1,4 +1,4 @@
-import {selectedFrame} from './segment-review.js';
+import {selectedFrame} from './segment-review.js?v=deferred17';
 import {proposeAutoSelections} from './auto-selection.js?v=spoken16';
 
 export const SELECTION_REVIEW_VERSION='guided-selection-review-v1';

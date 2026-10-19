@@ -1,4 +1,4 @@
-import {selectedFrame,sampleAtTime} from './segment-review.js?v=closed12';
+import {selectedFrame,sampleAtTime} from './segment-review.js?v=deferred17';
 import {summarize,scoreNIHSS,phaseAt,NIHSS_SOURCE} from './assessment.js';
 import {eyeUsable} from './eye-quality.js';
 import {threePositionEvidence} from './three-position.js?v=three13';
@@ -37,7 +37,7 @@ export function eyeDiagramState(sample){
   return Object.fromEntries(['right','left'].map(side=>{
     const kind=sample?.reviewKinds?.[side]??'original',usable=eyeUsable(sample,side);
     return [side,{position:usable?sample[side].corrected:null,kind,
-      label:kind==='closed'?'Eye closed':kind==='blink'?'Blink':kind==='unresolved'?'Unresolved':kind==='unchecked'?'Not checked':!usable?'No measurement':kind==='estimated'?'Accepted estimate':'Observed'}];
+      label:kind==='closed'?'Eye closed':kind==='not-visible'?'Not visible':kind==='deferred'?'Needs annotation':kind==='blink'?'Blink':kind==='unresolved'?'Unresolved':kind==='unchecked'?'Not checked':!usable?'No measurement':kind==='estimated'?'Accepted estimate':'Observed'}];
   }));
 }
 
@@ -66,7 +66,10 @@ export function clipGazeSuggestion(clip,report){
   const pending=report.segments.filter(s=>s.decision==='unreviewed').length;
   const estimated=samples.reduce((n,s)=>n+['left','right'].filter(side=>s.reviewKinds[side]==='estimated').length,0);
   const result={score:null,candidates:[],title:'Review required',reasons:[],evidence,originalEvidence:original,
-    pending,estimated,source:NIHSS_SOURCE,mode:'experimental-movement-suggestion',
+    pending,estimated,deferredCount:report.segments.filter(s=>s.decision==='deferred').length,
+    notVisibleCount:report.segments.filter(s=>s.decision==='not-visible').length,
+    closedCount:report.segments.filter(s=>s.decision==='closed').length,
+    source:NIHSS_SOURCE,mode:'experimental-movement-suggestion',
     selectionReview:clip.selectionReview?{status:clip.selectionReview.status,confirmedAt:clip.selectionReview.confirmedAt,scope:'Instruction labels and times only; not a clinical score.'}:null,
     limitation:'Normalized iris positions are not clinical gaze angles. Research thresholds are not NIHSS cutoffs.'};
   if(pending){result.reasons.push(`Choose a result for ${pending} remaining segment${pending===1?'':'s'} first.`);return result;}

@@ -72,7 +72,7 @@ body.app-mode .app-source-summary{font-size:11px}
 .check-version canvas{display:block;width:100%;height:auto}
 .check-version:last-child{border-color:#9570b0}.check-version:last-child strong{color:#ecc4ff}
 .check-eye{border-top:1px solid #34534d;margin-top:14px}.check-nav{font-variant-numeric:tabular-nums;font-weight:600}
-.self-check button{min-height:42px}.self-check .buttons{flex-wrap:wrap}
+.self-check button{min-height:44px}.self-check .buttons{flex-wrap:wrap}
 .self-check select,.self-check input{width:100%;max-width:100%;min-height:44px}
 .recorded-clip>details{padding:12px 0;border-top:1px solid #314858;margin-top:12px}
 .recorded-clip>details>summary{cursor:pointer;color:#b0c5d3;font-weight:600}
@@ -98,7 +98,7 @@ body.app-mode .app-source-summary{font-size:11px}
 .clip-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin:0 0 10px}
 .clip-tabs button{min-width:0;padding:7px 2px;font-size:13px}
 .clip-tabs button[aria-pressed=true]{background:#2a6757;border-color:#87d6bd;color:white}
-.segment-nav{display:grid;grid-template-columns:40px minmax(0,1fr) 40px;gap:5px;margin:6px 0}
+.segment-nav{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;gap:5px;margin:6px 0}
 .segment-nav button{font-size:26px;padding:0;min-width:0}.segment-nav select{min-width:0;padding:5px;font-size:13px!important}
 .track-choice{padding:0!important;text-align:left;display:block;width:100%;color:#dcebf4}
 .track-choice strong{min-height:34px;font-size:11px;padding:6px!important}
@@ -111,9 +111,13 @@ body.app-mode .app-source-summary{font-size:11px}
 .compact-review .segment-preview .buttons button,.compact-review .segment-preview select{font-size:12px;padding:5px}
 .compact-review .segment-preview>p{font-size:11px;line-height:1.3;margin:3px 0;min-height:15px}
 .compact-review .compact-coverage{font-size:11px;line-height:1.4;margin:5px 0}
-.review-footer{display:flex;gap:8px;justify-content:space-between}
+.review-footer{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
 .review-footer button{flex:1;min-width:0;font-size:12px;padding:6px 8px;background:transparent;min-height:44px}
 .review-footer button[aria-pressed=true]{background:#675032;color:#ffe4b1}
+.annotation-queue{margin-top:8px;border-top:1px solid #35534e}
+.annotation-queue>summary{min-height:44px;padding:10px 0;cursor:pointer;font-size:13px}
+.annotation-items{display:grid;gap:6px}.annotation-items button{min-height:44px;text-align:left;white-space:normal}
+.annotation-queue .hint{margin:8px 0}
 .review-progress{font-size:11px;margin:5px 0;text-align:right}
 .review-reasons summary{font-size:12px;cursor:pointer}.review-reasons{margin-top:4px}
 .compact-review .reviewed-playback{margin:0;border:0;padding:0}.compact-review .reviewed-playback h3{display:none}

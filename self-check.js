@@ -1,4 +1,4 @@
-import {SEGMENT_VERSION,SIDES,LIMITS,buildSegmentReview} from './segment-review.js?v=closed12';
+import {SEGMENT_VERSION,SIDES,LIMITS,buildSegmentReview} from './segment-review.js?v=deferred17';
 import {eyeEvidence} from './eye-image-evidence.js?v=segment8';
 import {bitmapWithDeadline} from './frame-capture.js';
 

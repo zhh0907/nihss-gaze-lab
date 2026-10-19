@@ -1,4 +1,4 @@
-import {selectedFrame,sampleAtTime} from './segment-review.js?v=closed12';
+import {selectedFrame,sampleAtTime} from './segment-review.js?v=deferred17';
 import {drawEyeMarkers} from './recording.js';
 
 const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text)e.textContent=text;if(cls)e.className=cls;return e;};
@@ -25,7 +25,7 @@ export function drawEyeCrop(canvas,image,eye,reference,estimated=false){
 export function createSegmentPreview({clip,report,segment,onChoose=()=>{},disabled=false}){
   const root=el('div',null,'segment-preview'),pair=el('div',null,'check-pair');
   const frames=segment.sourceIndices.map(i=>report.frames.find(f=>f.sourceIndex===i));
-  const cards=['Original','Suggested'].map((label,i)=>{
+  const cards=['Keep original','Use suggested'].map((label,i)=>{
     const choice=i?'suggestion':'original',card=el('button',null,'check-version track-choice'),canvas=el('canvas'),caption=el('span');canvas.width=480;canvas.height=260;
     card.type='button';card.disabled=disabled||(i===1&&!segment.proposedCount);
     card.setAttribute('aria-label',`Choose ${i?'suggested':'original'} track for ${segment.side} eye`);
@@ -82,7 +82,7 @@ export function makeReviewRenderer(clip,report,version='selected'){
     ctx.fillStyle='#dcebf4';ctx.font=Math.max(14,Math.min(20,w/40))+'px Segoe UI';
     ctx.fillText((version==='original'?'ORIGINAL TRACKING':'REVIEWED TRACKING')+' · '+time.toFixed(2)+' s',16,27,w-32);
     for(const [j,side]of ['left','right'].entries()){
-      const kind=s?.reviewKinds[side],label=kind==='closed'?'Eye closed':kind==='blink'?'Blink · skipped':kind==='unresolved'?'Unresolved':value(s?.[side]);
+      const kind=s?.reviewKinds[side],label=kind==='closed'?'Eye closed':kind==='not-visible'?'Not visible':kind==='deferred'?'Needs annotation':kind==='blink'?'Blink · skipped':kind==='unresolved'?'Unresolved':value(s?.[side]);
       ctx.fillStyle=kind==='estimated'?'#e4a0ff':'#cee6ec';ctx.fillText((side==='left'?'Left':'Right')+': '+(kind==='estimated'?'~ ':'')+label,16,53+j*25,w-32);
     }
     ctx.fillStyle='#a5bacc';ctx.fillText('Purple = accepted estimate · Research use',16,104,w-32);

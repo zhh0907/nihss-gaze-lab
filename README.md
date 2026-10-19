@@ -27,7 +27,9 @@ For local use, serve this repository with `python -m http.server 8000` and open 
 
 ## Review and exports
 
-Original recordings are preserved. Suspicious segments show original and proposed tracks; the examiner can accept, reject, undo, mark an eye closed, or leave a segment unresolved. Accepted estimates are visibly marked and their provenance is retained in exports. Long or ambiguous gaps remain unresolved. Missing tracking is not normal movement and is not filled with zero.
+Original recordings are preserved. Only the suspicious eye appears. Tap **Keep original** or **Use suggested**, or choose **Both need correction**, **Eye not visible**, or **Eye closed**. Undo is available. Both need correction defers precise annotation until after the patient encounter; it approves neither candidate and excludes the suspect measurements. Eye not visible and Eye closed exclude the affected eye throughout the displayed segment. The other eye is unchanged. Missing tracking is not normal movement and is not filled with zero.
+
+**Later annotation** lists deferred segments. Use the clip's **Download → Save annotation package → Save ZIP** before closing or refreshing. The package contains the original video, exact archived source frames for deferred segments, candidate eye tracks, decisions and history. It omits clinical and automatic NIHSS scores. It is a handoff package, not a manual annotation editor; no automatic upload, persistent cloud queue, or online model update is implemented. Keep saved packages in approved study storage. Review JSON schema 9 and CSV also preserve choices and pending annotation. A deferred decision completes bedside review but does not become a valid eye measurement or a preference for either track.
 
 Eye-only playback shows normalized horizontal, head-relative iris position, not calibrated 3D eye rotation. MP4/WebM availability depends on the browser. Conversion may alter frame timing; use original recordings and timestamps for frame-sensitive analysis.
 

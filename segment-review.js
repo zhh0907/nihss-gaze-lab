@@ -1,6 +1,6 @@
 import {eyeUsable} from './eye-quality.js';
 
-export const SEGMENT_VERSION='segment8';
+export const SEGMENT_VERSION='deferred17';
 export const SIDES=['left','right'];
 export const LIMITS=Object.freeze({maxGap:.25,mergeGap:.30,maxBridge:.25,maxPartialSpan:1.6,minSupport:.64,minMargin:.025});
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
@@ -147,7 +147,7 @@ export function buildSegmentReview(report){
       report.segments.push({id:side+'-'+first.sourceIndex,side,start:first.time,end:last.time,
         sourceIndices:members.map(f=>f.sourceIndex),flaggedIndices:suspect.map(f=>f.sourceIndex),
         proposedCount:suggestions.length,unresolvedCount:suspect.length-suggestions.length,
-        reasons:[...new Set(suspect.flatMap(f=>f[side].flags))],decision:'unreviewed',decidedAt:null});group=[];
+        reasons:[...new Set(suspect.flatMap(f=>f[side].flags))],decision:'unreviewed',decidedAt:null,choiceHistory:[]});group=[];
     };
     for(const i of flagged){
       if(group.length){const last=group.at(-1),between=frames.slice(last+1,i+1);
@@ -165,16 +165,20 @@ export function buildSegmentReview(report){
 }
 
 export function chooseSegment(report,id,decision,now=new Date().toISOString()){
-  if(!['unreviewed','original','suggestion','uncertain','closed'].includes(decision))throw Error('Invalid segment choice');
+  if(!['unreviewed','original','suggestion','uncertain','closed','deferred','not-visible'].includes(decision))throw Error('Invalid segment choice');
   const segment=report.segments.find(s=>s.id===id);if(!segment)throw Error('Segment not found');
   if(decision==='suggestion'&&!segment.proposedCount)throw Error('No supported replacement in this segment');
+  // History belongs to this report. A fresh image check builds a new report;
+  // this is not a cross-report or server audit log. Undo remains a recorded event.
+  segment.choiceHistory??=[];
+  segment.choiceHistory.push({at:now,decision,previousDecision:segment.decision??'unreviewed',previousDecidedAt:segment.decidedAt??null});
   segment.decision=decision;segment.decidedAt=decision==='unreviewed'?null:now;
   const indices=new Set(segment.sourceIndices??segment.flaggedIndices),flagged=new Set(segment.flaggedIndices);
-  // An examiner's closure label covers the entire displayed eye segment,
-  // including apparently valid samples between suspect frames. Other choices
-  // reset those intervening samples so a previous closure never leaks through.
+  // Closure and visibility labels cover the whole displayed single-eye segment,
+  // including valid-looking bridge samples. Deferred correction excludes only
+  // suspect samples. Changing a choice resets any previous whole-segment mask.
   for(const f of report.frames)if(indices.has(f.sourceIndex)){
-    const e=f[segment.side],apply=decision==='closed'||flagged.has(f.sourceIndex);
+    const e=f[segment.side],apply=['closed','not-visible'].includes(decision)||flagged.has(f.sourceIndex);
     e.decision=apply?decision:'unreviewed';e.decidedAt=apply?segment.decidedAt:null;
   }
   return segment;
@@ -185,8 +189,13 @@ export function selectedFrame(sample,review,version='selected'){
   for(const side of SIDES){
     const e=review?.[side];out.reviewKinds[side]='original';
     if(e?.ignored){out[side]=null;out.reviewKinds[side]='blink';continue;}
-    if(version==='selected'&&e?.decision==='closed'){out[side]=null;out.reviewKinds[side]='closed';continue;}
+    if(version==='selected'&&['closed','not-visible'].includes(e?.decision)){
+      out[side]=null;out.reviewKinds[side]=e.decision;continue;
+    }
     if(version==='original'||!e?.flagged)continue;
+    if(version==='selected'&&e.decision==='deferred'){
+      out[side]=null;out.reviewKinds[side]='deferred';continue;
+    }
     const use=version==='proposal'||e.decision==='suggestion';
     if(use&&e.proposal){out[side]=structuredClone(e.proposal);out.reviewKinds[side]='estimated';}
     else if((use&&!e.proposal)||e.decision==='uncertain'){out[side]=null;out.reviewKinds[side]='unresolved';}
@@ -200,8 +209,34 @@ export function sampleAtTime(samples,time,key='rawVideoTimeSeconds',maxAge=.25){
   return index>=0&&time-samples[index][key]<=maxAge?index:-1;
 }
 
+export function annotationQueue(report){
+  return (report?.segments??[]).filter(segment=>segment.decision==='deferred').map(segment=>({
+    id:segment.id,eye:segment.side,start:segment.start,end:segment.end,
+    sourceIndices:[...(segment.sourceIndices??segment.flaggedIndices??[])],flaggedIndices:[...(segment.flaggedIndices??[])],
+    decision:'deferred',decidedAt:segment.decidedAt??null,pendingAnnotation:true,
+    reason:'Both candidates need correction; deferred for offline annotation.',reviewReasons:[...(segment.reasons??[])],
+  }));
+}
+
+const decisionMeaning={
+  unreviewed:'Not reviewed',original:'Original selected',suggestion:'Suggested correction selected',
+  uncertain:'Legacy unresolved choice',closed:'Eye closed',deferred:'Both candidates need correction; awaiting offline annotation',
+  'not-visible':'Eye position not visible; no position selected',
+};
 export function segmentCsv(report){
-  const rows=[['sample_index','time_s','eye','ignored_blink','flagged','original','suggestion','decision','selected','kind','decided_at']];
-  for(const f of report.frames){const s=selectedFrame(f.sample,f);for(const side of SIDES){const e=f[side];rows.push([f.sourceIndex,f.time,side,e.ignored,e.flagged,e.originalUsable?e.original?.corrected:null,e.proposal?.corrected,e.decision,eyeUsable(s,side)?s[side].corrected:null,s.reviewKinds[side],e.decidedAt]);}}
+  const rows=[['sample_index','time_s','eye','ignored_blink','flagged','original','suggestion','decision','selected','kind','decided_at',
+    'segment_id','decision_meaning','visibility','pending_annotation']];
+  const membership=new Map();
+  for(const segment of report.segments??[])for(const index of segment.sourceIndices??segment.flaggedIndices??[])membership.set(`${segment.side}:${index}`,segment);
+  for(const f of report.frames){
+    const s=selectedFrame(f.sample,f);
+    for(const side of SIDES){
+      const e=f[side],segment=membership.get(`${side}:${f.sourceIndex}`);
+      const visibility=e.ignored?'blink':e.decision==='closed'?'eye-closed':e.decision==='not-visible'?'eye-position-not-visible':'not-labelled';
+      rows.push([f.sourceIndex,f.time,side,e.ignored,e.flagged,e.originalUsable?e.original?.corrected:null,e.proposal?.corrected,e.decision,
+        eyeUsable(s,side)?s[side].corrected:null,s.reviewKinds[side],e.decidedAt,segment?.id??null,
+        decisionMeaning[e.decision]??'Not reviewed',visibility,e.decision==='deferred'&&e.flagged===true]);
+    }
+  }
   return rows.map(r=>r.map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(',')).join('\r\n');
 }

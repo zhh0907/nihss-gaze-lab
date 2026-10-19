@@ -1,4 +1,4 @@
-import {selectedFrame} from './segment-review.js';
+import {selectedFrame} from './segment-review.js?v=deferred17';
 import {proposeAutoSelections} from './auto-selection.js?v=spoken16';
 import {threePositionEvidence} from './three-position.js';
 import {temporalGazeEvidence} from './temporal-gaze.js';

@@ -1,11 +1,12 @@
-import {chooseSegment,segmentCsv} from './segment-review.js?v=closed12';
-import {createSegmentPreview,createReviewedPlayer,makeReviewRenderer,reviewedVideoSize} from './segment-player.js?v=three13';
-import {createEyeMotionPlayer,makeEyeMotionRenderer,clipGazeSuggestion,reviewedSamples,EYE_VIDEO_SIZE} from './eye-motion.js?v=spoken16';
+import {chooseSegment,segmentCsv,annotationQueue} from './segment-review.js?v=deferred17';
+import {createAnnotationPackage} from './annotation-package.js?v=deferred17';
+import {createSegmentPreview,createReviewedPlayer,makeReviewRenderer,reviewedVideoSize} from './segment-player.js?v=deferred17';
+import {createEyeMotionPlayer,makeEyeMotionRenderer,clipGazeSuggestion,reviewedSamples,EYE_VIDEO_SIZE} from './eye-motion.js?v=deferred17';
 import {parseIntervals,NIHSS_SOURCE} from './assessment.js';
 import {recordingMime,extensionFor} from './recording.js';
 import {convertVideo} from './video-export.js';
-import {initializeSelectionReview,refreshAutomaticSelections,editSelection,clearSelections,confirmSelections} from './selection-review.js?v=spoken16';
-import {automaticGazeAssessment} from './automatic-assessment.js?v=spoken16';
+import {initializeSelectionReview,refreshAutomaticSelections,editSelection,clearSelections,confirmSelections} from './selection-review.js?v=deferred17';
+import {automaticGazeAssessment} from './automatic-assessment.js?v=deferred17';
 
 const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text)e.textContent=text;if(cls)e.className=cls;return e;};
 function field(text,options,value){
@@ -21,7 +22,22 @@ export function createSelfCheckUI({clip,clipNumber,retry,saveBlob,busyMessage=()
   const downloads=el('section');downloads.append(el('p','Reviewed downloads appear after the local check.','hint'));
   let disposed=false,position=0,builtReport=null,preview=null,player=null,eyes=null,progress,jump,panels,controller=null,
     result,positionPanel,positionHint,positionButtons=[],temporalButtons=[],threePanel,temporalPanel,methodInput,phaseBox,selectionBar,selectionLabel,selectionError,confirmButton,adjustButton,restoreAuto,selectionPreviews=[],adjusting=false,examContext,exportHint,contextFields=[],tabs=[],views={},activeView=clip.reviewView??'review',invalidateVideo=()=>{},exportButtons=[];
-  function summary(){const r=clip.checkReport;progress.textContent=`${r.segments.filter(s=>s.decision!=='unreviewed').length} / ${r.segments.length} reviewed`;}
+  let queuePanel,queueTitle,queueItems,packageButton;
+  function reviewCounts(){
+    const segments=clip.checkReport.segments,count=decision=>segments.filter(s=>s.decision===decision).length;
+    return {total:segments.length,decided:segments.length-count('unreviewed'),unreviewed:count('unreviewed'),
+      deferredCount:count('deferred'),notVisibleCount:count('not-visible'),closedCount:count('closed')};
+  }
+  function summary(){
+    const counts=reviewCounts(),queue=annotationQueue(clip.checkReport);
+    progress.textContent=`${counts.decided} / ${counts.total} checked${queue.length?` · ${queue.length} for later annotation`:''}`;
+    queuePanel.hidden=!queue.length;queueTitle.textContent=`Later annotation (${queue.length})`;queueItems.replaceChildren();
+    for(const item of queue){
+      const button=el('button',`${item.eye==='left'?'Left':'Right'} eye · ${item.start.toFixed(1)}–${item.end.toFixed(1)} s`);
+      button.type='button';button.onclick=()=>{position=clip.checkReport.segments.findIndex(s=>s.id===item.id);draw();panels.scrollIntoView({block:'nearest'});};queueItems.append(button);
+    }
+    if(packageButton){packageButton.hidden=!queue.length;packageButton.disabled=!!controller;}
+  }
   function showView(name){
     const previousView=activeView;
     preview?.pause();player?.pause();eyes?.pause();
@@ -46,13 +62,15 @@ export function createSelfCheckUI({clip,clipNumber,retry,saveBlob,busyMessage=()
     if(!segment){panels.append(el('p','No segments to review.','hint'));summary();return;}
     preview=createSegmentPreview({clip,report:r,segment,onChoose:choose,disabled:!!controller});panels.append(preview.element);
     const coverage=el('p',`${segment.proposedCount} suggested${segment.unresolvedCount?` · ${segment.unresolvedCount} unresolved`:''}`,'hint compact-coverage');
-    const footer=el('div',null,'review-footer'),closed=el('button','Eye closed'),uncertain=el('button','Unresolved'),reset=el('button','Undo');
-    closed.type='button';closed.disabled=!!controller;closed.setAttribute('aria-label',`Mark ${segment.side} eye closed for this segment`);
-    closed.setAttribute('aria-pressed',String(segment.decision==='closed'));closed.onclick=()=>choose('closed');
-    uncertain.disabled=!!controller;uncertain.setAttribute('aria-pressed',String(segment.decision==='uncertain'));uncertain.onclick=()=>choose('uncertain');
-    reset.disabled=segment.decision==='unreviewed'||!!controller;reset.onclick=()=>choose('unreviewed');footer.append(closed,uncertain,reset);
-    const evidence=el('details',null,'review-reasons');evidence.append(el('summary',segment.decision==='closed'?'Marked eye closed · Details':segment.decision==='uncertain'?'Marked unresolved · Details':'Details'),el('p',segment.reasons.join(' · '),'hint'),
-      el('p','Tap a picture to choose for this eye segment. Eye closed excludes this eye throughout the displayed interval. Purple = estimate. Unsupported positions remain empty. Blinks are skipped.','hint'));
+    const footer=el('div',null,'review-footer'),reset=el('button','Undo');
+    for(const [decision,label]of [['deferred','Both need correction'],['not-visible','Eye not visible'],['closed','Eye closed']]){
+      const button=el('button',label);button.type='button';button.disabled=!!controller;
+      button.setAttribute('aria-pressed',String(segment.decision===decision));button.onclick=()=>choose(decision);footer.append(button);
+    }
+    reset.type='button';reset.disabled=segment.decision==='unreviewed'||!!controller;reset.onclick=()=>choose('unreviewed');footer.append(reset);
+    const notes={deferred:'For later annotation', 'not-visible':'Marked not visible',closed:'Marked eye closed',uncertain:'Marked unresolved'};
+    const evidence=el('details',null,'review-reasons');evidence.append(el('summary',notes[segment.decision]?notes[segment.decision]+' · Details':'Details'),el('p',segment.reasons.join(' · '),'hint'),
+      el('p','Tap a picture to keep or replace this eye track. Both need correction saves a task for later annotation. Eye not visible and Eye closed leave this eye blank throughout the segment. Purple = estimate. Blinks are skipped. Choices do not train the model.','hint'));
     panels.append(coverage,footer,evidence);summary();
   }
   function updateResult(){
@@ -138,7 +156,8 @@ export function createSelfCheckUI({clip,clipNumber,retry,saveBlob,busyMessage=()
     const rules=el('p','0: normal. 1: partial palsy or an overcome deviation. 2: forced deviation / total paresis not overcome by the oculocephalic reflex. A clinician must establish the applicable findings.','hint');
     const source=el('a','NIHSS instructions ↗');source.href=NIHSS_SOURCE;source.target='_blank';source.rel='noreferrer';more.append(rules,source);result.append(more);
     exportButtons.forEach(b=>b.disabled=!!controller||r.pending>0||!b.dataset.available);
-    if(exportHint)exportHint.textContent=r.pending?'Finish review to export.':'';
+    if(exportHint)exportHint.textContent=r.pending?'Finish review to export.':r.deferredCount?`${r.deferredCount} for later annotation. Unsupported positions stay blank.`:'';
+    if(packageButton)packageButton.disabled=!!controller;
   }
   function buildPositions(){
     const box=el('div',null,'three-positions'),buttons=el('div',null,'position-buttons');positionButtons=[];
@@ -235,16 +254,34 @@ export function createSelfCheckUI({clip,clipNumber,retry,saveBlob,busyMessage=()
         finally{controller=null;if(!disposed){stop.hidden=true;format.input.disabled=false;contextFields.forEach(f=>f.disabled=false);draw();updateResult();}}
       };
     }
+    packageButton=el('button','Save annotation package');packageButton.type='button';
+    packageButton.onclick=async()=>{
+      const busy=busyMessage();if(busy){exportStatus.textContent=busy;return;}
+      if(controller||!annotationQueue(clip.checkReport).length)return;
+      preview?.pause();player.pause();eyes.pause();controller=new AbortController();const signal=controller.signal;
+      stop.hidden=false;stop.onclick=()=>controller?.abort();format.input.disabled=true;save.hidden=true;
+      contextFields.forEach(f=>f.disabled=true);draw();updateResult();
+      try{
+        const archive=await encode(controller,()=>createAnnotationPackage({clip,report:clip.checkReport,onProgress:()=>{
+          if(disposed||signal.aborted)throw Error('Package export cancelled.');exportStatus.textContent='Preparing annotation package…';
+        }}));
+        if(disposed||signal.aborted)return;save.textContent='Save ZIP';save.hidden=false;
+        save.onclick=()=>saveBlob(archive.blob,archive.filename);prepareDownload(()=>{save.hidden=true;save.onclick=null;});
+        exportStatus.textContent='Ready. Tap Save ZIP before closing this page.';
+      }catch(e){if(!disposed)exportStatus.textContent=e.message;}
+      finally{controller=null;if(!disposed){stop.hidden=true;format.input.disabled=false;contextFields.forEach(f=>f.disabled=false);draw();updateResult();}}
+    };
     const data=el('details');data.append(el('summary','Review data'));
     const json=el('button','Download review JSON'),csv=el('button','Download review CSV');
-    json.onclick=()=>saveBlob(new Blob([JSON.stringify({schema:'gaze-reviewed-motion-8',original:clip.data,review:clip.checkReport,
+    json.onclick=()=>saveBlob(new Blob([JSON.stringify({schema:'gaze-reviewed-motion-9',original:clip.data,review:clip.checkReport,
+      annotationQueue:annotationQueue(clip.checkReport),reviewCounts:reviewCounts(),modelUpdatedByReview:false,
       reviewedSamples:reviewedSamples(clip,clip.checkReport),phaseOverrides:clip.reviewIntervals??null,
       gazeScoringMode:clip.gazeScoringMode,threePositionSelection:clip.threePositionSelection??null,temporalSelection:clip.temporalSelection??null,
       selectionReview:clip.selectionReview??null,
       clinicalObservation:clip.clinicalObservation??null,automaticAssessment:automaticGazeAssessment(clip,clip.checkReport),
       suggestion:clipGazeSuggestion(clip,clip.checkReport)},null,2)],{type:'application/json'}),base+'_review.json');
     csv.onclick=()=>saveBlob(new Blob([segmentCsv(clip.checkReport)],{type:'text/csv;charset=utf-8'}),base+'_review.csv');
-    data.append(json,csv);downloads.append(format.label,buttons,exportHint,stop,save,exportStatus,data);
+    data.append(json,csv);downloads.append(format.label,buttons,exportHint,packageButton,stop,save,exportStatus,data);
   }
   function build(){
     const r=clip.checkReport;body.replaceChildren();body.hidden=false;tabs=[];
@@ -259,7 +296,10 @@ export function createSelfCheckUI({clip,clipNumber,retry,saveBlob,busyMessage=()
     previous.setAttribute('aria-label','Previous segment');next.setAttribute('aria-label','Next segment');
     jump=el('select');jump.setAttribute('aria-label','Suspicious segment');jump.onchange=()=>{position=Number(jump.value);draw();};
     previous.onclick=()=>{if(position>0){position--;draw();}};next.onclick=()=>{if(position<r.segments.length-1){position++;draw();}else showView('eyes');};
-    strip.append(previous,jump,next);strip.hidden=!r.segments.length;panels=el('div');progress=el('p',null,'hint review-progress');views.review.append(progress,strip,panels);
+    strip.append(previous,jump,next);strip.hidden=!r.segments.length;panels=el('div');progress=el('p',null,'hint review-progress');
+    queuePanel=el('details',null,'annotation-queue');queueTitle=el('summary');queueItems=el('div',null,'annotation-items');
+    queuePanel.append(queueTitle,queueItems,el('p','Download → Save annotation package. Save before closing this page.','hint'));
+    views.review.append(progress,strip,panels,queuePanel);
     player=createReviewedPlayer({clip,report:r,clipNumber});views.video.append(player.element);
     eyes=createEyeMotionPlayer({clip,report:r});result=el('div',null,'clip-score');positionPanel=buildMethods();examContext=buildContext();views.eyes.append(eyes.element,positionPanel,result,examContext);
     body.append(nav,...Object.values(views));builtReport=r;buildDownloads();draw();updateResult();showView(activeView);
