@@ -182,7 +182,7 @@ export function drawEyeMotion(ctx,sample,time){
   ctx.fillStyle='#97b2c4';ctx.font='25px system-ui';ctx.fillText(`${time.toFixed(2)} s`,820,34);
   const state=eyeDiagramState(sample);
   for(const [i,side]of ['right','left'].entries()){
-    const x=48+i*480,y=120,width=384,e=state[side],color=side==='right'?'#80baff':'#61dcc3';
+    const x=48+i*480,y=120,width=384,e=state[side],color='#e4a0ff';
     ctx.fillStyle=color;ctx.font='34px system-ui';ctx.fillText(side==='right'?'Right eye':'Left eye',x,70);
     ctx.strokeStyle='#7592a6';ctx.lineWidth=4;ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+width,y);ctx.stroke();
     for(const p of [x,x+width]){ctx.beginPath();ctx.moveTo(p,y-12);ctx.lineTo(p,y+12);ctx.stroke();}
@@ -198,7 +198,7 @@ export function drawEyeMotion(ctx,sample,time){
   }
   ctx.fillStyle='#96acbd';ctx.font='28px system-ui';
   ctx.fillText('← Subject-right                   Subject-left →',28,235);
-  ctx.font='25px system-ui';ctx.fillText('Purple = estimate · Normalized, not degrees',28,279);
+  ctx.font='25px system-ui';ctx.fillText('Dashed / ~ = estimate · Normalized, not degrees',28,279);
   ctx.restore();
 }
 

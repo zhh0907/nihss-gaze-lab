@@ -1,10 +1,11 @@
 import {selectedFrame,sampleAtTime} from './segment-review.js?v=usability20';
-import {drawEyeMarkers} from './recording.js';
+import {drawEyeMarkers} from './recording.js?v=review21';
+import {reviewedSamples} from './eye-motion.js?v=review21';
 
 const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text)e.textContent=text;if(cls)e.className=cls;return e;};
 const value=e=>e?.valid&&Number.isFinite(e.corrected)?e.corrected.toFixed(3):'—';
 
-export function drawEyeCrop(canvas,image,eye,reference,estimated=false){
+export function drawEyeCrop(canvas,image,eye,reference,reviewed=false){
   const ctx=canvas.getContext('2d'),p=reference?.points??eye?.points;
   ctx.fillStyle='#0b1520';ctx.fillRect(0,0,canvas.width,canvas.height);
   if(!p?.a||!p?.b)return;
@@ -15,7 +16,7 @@ export function drawEyeCrop(canvas,image,eye,reference,estimated=false){
   if(eye?.valid&&eye.points?.iris){
     const x=(eye.points.iris.x*w-sx)/sw*canvas.width,y=(eye.points.iris.y*h-sy)/sh*canvas.height;
     ctx.strokeStyle='#10232b';ctx.lineWidth=8;ctx.beginPath();ctx.arc(x,y,10,0,Math.PI*2);ctx.stroke();
-    ctx.strokeStyle=estimated?'#e4a0ff':'#80d8ff';ctx.lineWidth=4;ctx.stroke();
+    ctx.strokeStyle=reviewed?'#e4a0ff':'#80d8ff';ctx.lineWidth=4;ctx.stroke();
     ctx.beginPath();ctx.moveTo(x-13,y);ctx.lineTo(x+13,y);ctx.moveTo(x,y-13);ctx.lineTo(x,y+13);ctx.stroke();
   }
 }
@@ -47,7 +48,7 @@ export function createSegmentPreview({clip,report,segment,onChoose=()=>{},disabl
     try{image=await createImageBitmap(entry.blob);}catch{status.textContent='Saved frame could not be read.';pause();return;}
     if(disposed||t!==token){image.close();return;}
     const e=f[segment.side],original=selectedFrame(f.sample,f,'original')[segment.side],proposal=selectedFrame(f.sample,f,'proposal')[segment.side];
-    drawEyeCrop(cards[0].canvas,image,original,e.original);drawEyeCrop(cards[1].canvas,image,proposal,e.original,!!e.proposal);
+    drawEyeCrop(cards[0].canvas,image,original,e.original);drawEyeCrop(cards[1].canvas,image,proposal,e.original,true);
     cards[0].caption.textContent=original?.valid?'':'Unmeasured';cards[1].caption.textContent=proposal?(e.proposal?'Estimate':'Unchanged'):'No reliable estimate';
     seek.value=index;status.textContent=f.time.toFixed(2)+' s';
     image.close();
@@ -65,7 +66,7 @@ export function makeReviewRenderer(clip,report,version='selected'){
   const review=new Map(report.frames.map(f=>[f.sourceIndex,f]));
   // Snapshot choices for a video export; a later doctor choice cannot change
   // the second half of a file which is already being encoded.
-  const samples=clip.data.samples.map((s,i)=>selectedFrame(s,review.get(i),version));
+  const samples=version==='selected'?reviewedSamples(clip,report):clip.data.samples.map((s,i)=>selectedFrame(s,review.get(i),version));
   return (ctx,video,time)=>{
     const {width:w,height:h}=ctx.canvas,fh=h-144,i=sampleAtTime(samples,time),s=i<0?null:samples[i];
     ctx.fillStyle='#0b1520';ctx.fillRect(0,0,w,h);
@@ -73,7 +74,7 @@ export function makeReviewRenderer(clip,report,version='selected'){
     if(video.readyState>=2)ctx.drawImage(video,0,144,w,fh);ctx.restore();
     if(s){ctx.save();ctx.translate(0,144);const observed={...s};
       for(const side of ['left','right'])if(s.reviewKinds[side]==='estimated')observed[side]=null;
-      drawEyeMarkers(ctx,observed,w,fh);
+      drawEyeMarkers(ctx,observed,w,fh,version==='original'?{}:{markerColor:'#e4a0ff'});
       for(const side of ['left','right'])if(s.reviewKinds[side]==='estimated'){
         const p=s[side].points;ctx.strokeStyle=ctx.fillStyle='#e4a0ff';ctx.lineWidth=2;ctx.setLineDash([4,3]);
         ctx.beginPath();ctx.arc(p.iris.x*w,p.iris.y*fh,6,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
@@ -82,10 +83,10 @@ export function makeReviewRenderer(clip,report,version='selected'){
     ctx.fillStyle='#dcebf4';ctx.font=Math.max(14,Math.min(20,w/40))+'px Segoe UI';
     ctx.fillText((version==='original'?'ORIGINAL TRACKING':'REVIEWED TRACKING')+' · '+time.toFixed(2)+' s',16,27,w-32);
     for(const [j,side]of ['left','right'].entries()){
-      const kind=s?.reviewKinds[side],label=kind==='buffer'?'Outside analysis':kind==='closed'?'Eye closed':kind==='not-visible'?'Not visible':kind==='deferred'?'Needs annotation':kind==='blink'?'Blink · skipped':kind==='unresolved'?'Unresolved':value(s?.[side]);
+      const kind=s?.reviewKinds[side],label=kind==='buffer'?'Outside analysis':kind==='closed'?'Eye closed':kind==='not-visible'?'Not visible':kind==='deferred'?'Needs annotation':kind==='blink'?'Blink · skipped':kind==='unresolved'?'Unresolved':kind==='unchecked'?'Not checked':value(s?.[side]);
       ctx.fillStyle=kind==='estimated'?'#e4a0ff':'#cee6ec';ctx.fillText((side==='left'?'Left':'Right')+': '+(kind==='estimated'?'~ ':'')+label,16,53+j*25,w-32);
     }
-    ctx.fillStyle='#a5bacc';ctx.fillText('Purple = accepted estimate · Research use',16,104,w-32);
+    ctx.fillStyle='#a5bacc';ctx.fillText(version==='original'?'Original tracking · Research use':'Reviewed positions · Dashed / ~ = estimate',16,104,w-32);
     ctx.fillText('Raw-video alignment is approximate',16,130,w-32);
   };
 }
@@ -94,13 +95,14 @@ export function createReviewedPlayer({clip,report,clipNumber}){
   const root=el('section',null,'reviewed-playback'),title=el('h3','Full video comparison');
   const select=el('select');select.setAttribute('aria-label','Full video version');
   select.add(new Option('Original','original'));select.add(new Option('Reviewed','selected'));
+  select.value='selected';
   const video=el('video');video.muted=true;video.playsInline=true;video.preload='metadata';video.className='repair-decoder';video.tabIndex=-1;video.setAttribute('aria-hidden','true');
   const canvas=el('canvas');Object.assign(canvas,reviewedVideoSize(clip.data));canvas.setAttribute('aria-label','Clip '+clipNumber+' full review video');
   const controls=el('div',null,'buttons'),play=el('button','Play');play.setAttribute('aria-label','Play full video');controls.append(play);
   const seek=el('input');seek.type='range';seek.min=0;seek.max=clip.data.recording.durationSeconds;seek.step=.01;seek.value=0;seek.setAttribute('aria-label','Full video time');
   const status=el('p',null,'hint');status.setAttribute('role','status');
   root.append(select,canvas,video,controls,seek,status);
-  let render=makeReviewRenderer(clip,report,'original'),raf=null,disposed=false,pendingSeek=null,range=null,playToken=0;
+  let render=makeReviewRenderer(clip,report,'selected'),raf=null,disposed=false,pendingSeek=null,range=null,playToken=0;
   const draw=()=>{if(disposed)return;render(canvas.getContext('2d'),video,video.currentTime);seek.value=video.currentTime;};
   function loop(){if(range&&video.currentTime>=range.end){video.currentTime=range.end;pause();}draw();if(!video.paused&&!video.ended&&!disposed)raf=requestAnimationFrame(loop);}
   function pause(){playToken++;video.pause();cancelAnimationFrame(raf);play.textContent='Play';play.setAttribute('aria-label','Play full video');}

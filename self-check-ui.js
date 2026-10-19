@@ -1,7 +1,7 @@
 import {chooseSegment,segmentCsv,annotationQueue} from './segment-review.js?v=usability20';
 import {createAnnotationPackage} from './annotation-package.js?v=usability20';
-import {createSegmentPreview,createReviewedPlayer,makeReviewRenderer,reviewedVideoSize} from './segment-player.js?v=usability20';
-import {createEyeMotionPlayer,makeEyeMotionRenderer,clipGazeSuggestion,reviewedSamples,EYE_VIDEO_SIZE} from './eye-motion.js?v=usability20';
+import {createSegmentPreview,createReviewedPlayer,makeReviewRenderer,reviewedVideoSize} from './segment-player.js?v=review21';
+import {createEyeMotionPlayer,makeEyeMotionRenderer,clipGazeSuggestion,reviewedSamples,EYE_VIDEO_SIZE} from './eye-motion.js?v=review21';
 import {parseIntervals,NIHSS_SOURCE} from './assessment.js';
 import {recordingMime,extensionFor} from './recording.js';
 import {convertVideo} from './video-export.js';
@@ -74,7 +74,7 @@ export function createSelfCheckUI({clip,clipNumber,retry,saveBlob,busyMessage=()
     reset.type='button';reset.disabled=segment.decision==='unreviewed'||!!controller;reset.onclick=()=>choose('unreviewed');footer.append(reset);
     const notes={deferred:'For later annotation', 'not-visible':'Marked not visible',closed:'Marked eye closed',uncertain:'Marked unresolved'};
     const evidence=el('details',null,'review-reasons');evidence.append(el('summary',notes[segment.decision]?notes[segment.decision]+' · Details':'Details'),el('p',[...segment.reasons,...(segment.unresolvedReasons??[])].join(' · '),'hint'),
-      el('p','Tap a picture to keep or replace this eye track. Both need correction saves a task for later annotation. Eye closed leaves this eye blank throughout the segment. Purple = estimate. Blinks are skipped. Choices do not train the model.','hint'));
+      el('p','Tap a picture to keep or replace this eye track. Both need correction saves a task for later annotation. Eye closed leaves this eye blank throughout the segment. The suggested version uses purple markers. Blinks are skipped. Choices do not train the model.','hint'));
     panels.append(coverage,footer,evidence);summary();
   }
   function updateResult(){

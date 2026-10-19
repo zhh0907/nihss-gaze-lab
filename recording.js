@@ -16,14 +16,14 @@ export const extensionFor=mime=>mime.startsWith('video/mp4')?'mp4':'webm';
 const fmt=(n,d=3)=>Number.isFinite(n)?n.toFixed(d):'—';
 const phases={center:'Center / rest',left:'Subject looks left',right:'Subject looks right',reflex:'Clinical reflex exam',unlabelled:'Unlabelled / preparation'};
 
-export function drawEyeMarkers(ctx,sample,width,height,{flipX=false}={}) {
+export function drawEyeMarkers(ctx,sample,width,height,{flipX=false,markerColor=null}={}) {
   const scale=Math.max(1,width/900),x=p=>(flipX?1-p.x:p.x)*width;
   for(const [side,color] of [['left','#61dcc3'],['right','#80baff']]){
     const eye=sample?.[side];if(!eye?.points)continue;
     const pts=eye.points,good=p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y);
     if(!good(pts.a)||!good(pts.b))continue;
     const usable=eyeUsable(sample,side),label=side==='left'?'L':'R';
-    ctx.save();ctx.strokeStyle=usable?color:'#f2bb70';ctx.fillStyle=ctx.strokeStyle;ctx.lineWidth=2*scale;
+    ctx.save();ctx.strokeStyle=usable?(markerColor??color):'#f2bb70';ctx.fillStyle=ctx.strokeStyle;ctx.lineWidth=2*scale;
     ctx.setLineDash(usable?[]:[5*scale,4*scale]);
     ctx.beginPath();ctx.moveTo(x(pts.a),pts.a.y*height);ctx.lineTo(x(pts.b),pts.b.y*height);ctx.stroke();
     ctx.font=`${13*scale}px Segoe UI`;
