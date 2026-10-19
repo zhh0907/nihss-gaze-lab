@@ -1,5 +1,5 @@
-import {selectedFrame} from './segment-review.js?v=adaptive19';
-import {proposeAutoSelections} from './auto-selection.js?v=adaptive19';
+import {selectedFrame} from './segment-review.js?v=usability20';
+import {proposeAutoSelections} from './auto-selection.js?v=usability20';
 
 export const SELECTION_REVIEW_VERSION='guided-selection-review-v1';
 const POSITION_KEYS=['rest','left','right'],PHASE_KEYS=['center','left','right'],BOUNDARIES=['start','end'];
@@ -11,6 +11,16 @@ const isGuided=clip=>['guided-exam-v1','guided-exam-v2','guided-exam-v3','guided
 const selections=clip=>({threePositionSelection:copy(clip.threePositionSelection??{}),temporalSelection:copy(clip.temporalSelection??{})});
 const freeze=value=>{if(value&&typeof value==='object'){Object.values(value).forEach(freeze);Object.freeze(value);}return value;};
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+// Recorded instructions exist independently of whether tracking can support a
+// score. This range is for playback only; never copy it into scoring selections.
+export function recordedPhasePreview(clip,phase){
+  if(!PHASE_KEYS.includes(phase))return null;
+  const matches=guidedFor(clip)?.intervals?.filter(r=>r.phase===phase)??[],duration=clip?.data?.recording?.durationSeconds;
+  if(matches.length!==1)return null;
+  const interval=matches[0];
+  if(!Number.isFinite(interval.start)||!Number.isFinite(interval.end)||!Number.isFinite(duration)||interval.start<0||interval.end<=interval.start||interval.end>duration+EPS)return null;
+  return {phase,start:interval.start,end:Math.min(duration,interval.end),completed:interval.completed===true};
+}
 function fingerprint(value){
   const text=JSON.stringify(value);let a=2166136261,b=5381;
   for(let i=0;i<text.length;i++){const n=text.charCodeAt(i);a=Math.imul(a^n,16777619);b=Math.imul(b,33)^n;}

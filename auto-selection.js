@@ -1,8 +1,8 @@
 import {eyeUsable} from './eye-quality.js';
 import {percentile} from './geometry.js';
 import {THREE_POSITION_RULES,threePositionEvidence} from './three-position.js';
-import {TEMPORAL_RULES} from './temporal-gaze.js?v=adaptive19';
-import {selectResponseWindow,RESPONSE_RULES} from './response-selection.js?v=adaptive19';
+import {TEMPORAL_RULES} from './temporal-gaze.js?v=usability20';
+import {selectResponseWindow,RESPONSE_RULES} from './response-selection.js?v=usability20';
 
 // Selection uses recorded instructions, never a direction inferred from eye motion.
 // These conservative engineering checks do not establish normal eye movement.

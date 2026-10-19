@@ -1,9 +1,9 @@
-import {selectedFrame,sampleAtTime} from './segment-review.js?v=adaptive19';
+import {selectedFrame,sampleAtTime} from './segment-review.js?v=usability20';
 import {summarize,scoreNIHSS,phaseAt,NIHSS_SOURCE} from './assessment.js';
 import {eyeUsable} from './eye-quality.js';
 import {threePositionEvidence} from './three-position.js?v=three13';
-import {temporalGazeEvidence} from './temporal-gaze.js?v=adaptive19';
-import {proposeAutoSelections} from './auto-selection.js?v=adaptive19';
+import {temporalGazeEvidence} from './temporal-gaze.js?v=usability20';
+import {proposeAutoSelections} from './auto-selection.js?v=usability20';
 
 export const EYE_VIDEO_SIZE=Object.freeze({width:960,height:300});
 
@@ -214,12 +214,14 @@ export function createEyeMotionPlayer({clip,report}){
   const row=el('div'),play=el('button','Play'),timeLabel=el('span');play.setAttribute('aria-label','Play eye motion');row.className='motion-controls';row.append(play,timeLabel);
   const seek=el('input');seek.type='range';seek.min=0;seek.max=clip.data.recording.durationSeconds;seek.step=.01;seek.value=0;seek.setAttribute('aria-label','Eye motion time');
   root.append(canvas,row,seek);
-  let time=0,start=0,raf=null,playing=false,render=makeEyeMotionRenderer(clip,report);
+  let time=0,start=0,raf=null,playing=false,range=null,render=makeEyeMotionRenderer(clip,report);
   function draw(){render(canvas.getContext('2d'),null,time);seek.value=time;timeLabel.textContent=`${time.toFixed(1)} / ${Number(seek.max).toFixed(1)} s`;}
   function pause(){playing=false;cancelAnimationFrame(raf);play.textContent='Play';play.setAttribute('aria-label','Play eye motion');}
-  function loop(now){time=Math.min(Number(seek.max),(now-start)/1000);draw();if(time>=Number(seek.max)){pause();return;}raf=requestAnimationFrame(loop);}
-  play.onclick=()=>{if(playing){pause();return;}if(time>=Number(seek.max))time=0;playing=true;start=performance.now()-time*1000;play.textContent='Pause';play.setAttribute('aria-label','Pause eye motion');raf=requestAnimationFrame(loop);};
-  seek.oninput=()=>{pause();time=Number(seek.value);draw();};draw();
-  return {element:root,pause,getTime:()=>time,seekTime(t){pause();time=Math.max(0,Math.min(Number(seek.max),t));draw();},
+  function loop(now){const end=range?.end??Number(seek.max);time=Math.min(end,(now-start)/1000);draw();if(time>=end){pause();return;}raf=requestAnimationFrame(loop);}
+  function startPlayback(){if(time>=(range?.end??Number(seek.max)))time=range?.start??0;playing=true;start=performance.now()-time*1000;play.textContent='Pause';play.setAttribute('aria-label','Pause eye motion');raf=requestAnimationFrame(loop);}
+  play.onclick=()=>{if(playing){pause();return;}startPlayback();};
+  seek.oninput=()=>{pause();range=null;time=Number(seek.value);draw();};draw();
+  return {element:root,pause,getTime:()=>time,seekTime(t){pause();range=null;time=Math.max(0,Math.min(Number(seek.max),t));draw();},
+    playRange(a,b){pause();if(!Number.isFinite(a)||!Number.isFinite(b)||a<0||b<=a||b>Number(seek.max))return;range={start:a,end:b};time=a;draw();startPlayback();},
     refresh(){render=makeEyeMotionRenderer(clip,report);draw();},dispose:pause};
 }

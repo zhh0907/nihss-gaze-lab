@@ -1,6 +1,6 @@
-import {ReviewArchive} from './review-archive.js?v=adaptive19';
+import {ReviewArchive} from './review-archive.js?v=usability20';
 import {eyeUsable,eyeQualityLabel} from './eye-quality.js';
-import {GuidedExam,GuideSpeech,GUIDED_VERSION} from './guided-exam.js?v=adaptive19';
+import {GuidedExam,GuideSpeech,GUIDED_VERSION} from './guided-exam.js?v=usability20';
 // All media stays in memory until the user downloads it. Detection frames are
 // copied BEFORE transfer to the worker; overlays never use a newer camera frame.
 export const RECORDING_SCHEMA='gaze-recording-1';

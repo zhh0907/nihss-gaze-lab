@@ -1,8 +1,11 @@
 import {eyeUsable} from './eye-quality.js';
 
-export const SEGMENT_VERSION='adaptive19';
+export const SEGMENT_VERSION='usability20';
 export const SIDES=['left','right'];
-export const LIMITS=Object.freeze({maxGap:.25,mergeGap:.30,maxBridge:.25,maxPartialSpan:1.6,minSupport:.64,minMargin:.025});
+export const LIMITS=Object.freeze({maxGap:.25,mergeGap:.30,maxBridge:.25,maxPartialSpan:1.6,minSupport:.64,minMargin:.025,
+  partialAnchorDistance:.6,partialStableSpan:.14,partialStablePoints:3,partialImageSupport:.78,partialImageMargin:.05,
+  partialStableDistance:.045,partialEdgeHits:3,partialEdgeQuadrants:2});
+const EPS=1e-8;
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const finite=p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y);
 const headGood=s=>s?.head&&!(s.reasons??[]).length;
@@ -62,6 +65,50 @@ function processEye(frames,side){
        candidate.y<Math.min(a.c.y,b.c.y)-.10||candidate.y>Math.max(a.c.y,b.c.y)+.10)return null;
     return [a.f.sourceIndex,b.f.sourceIndex];
   }
+  function partialSameEyeSupport(index,candidate){
+    const imageSupported=(c,f)=>c?.supported&&c.centreVisible===false&&c.support>=LIMITS.partialImageSupport&&
+      c.margin>=LIMITS.partialImageMargin&&c.imageWitness?.hasLidContour&&c.imageWitness.hits>=LIMITS.partialEdgeHits&&
+      c.imageWitness.quadrants>=LIMITS.partialEdgeQuadrants&&c.ellipse?.rx>0&&c.ellipse?.ry>0&&
+      !f[side].evidence.candidates.some(other=>other.supported&&dist(other,c)>.075&&other.support>=c.support-.04);
+    if(!imageSupported(candidate,frames[index]))return null;
+    // Several adjacent, independently image-supported observations must agree.
+    // None of these points becomes an anchor for another estimate.
+    const neighbours=[index];
+    for(const direction of [-1,1])for(let i=index+direction;i>=0&&i<frames.length;i+=direction){
+      const previous=i-direction,lo=Math.min(i,previous),hi=Math.max(i,previous),path=frames[i][side].path;
+      if(blocked(frames[lo],frames[hi],side)||Math.abs(frames[i].time-frames[index].time)>.3||
+        !imageSupported(path,frames[i])||dist(path,candidate)>LIMITS.partialStableDistance)break;
+      neighbours.push(i);
+    }
+    neighbours.sort((a,b)=>a-b);
+    if(neighbours.length<LIMITS.partialStablePoints||frames[neighbours.at(-1)].time-frames[neighbours[0]].time+EPS<LIMITS.partialStableSpan)return null;
+    const clear=f=>{const e=f[side],c=e.evidence.candidates.find(v=>v.method==='Original');
+      return !e.ignored&&headGood(f.sample)&&eyeUsable(f.sample,side)&&c?.supported&&c.support>=.8&&c.centreVisible!==false&&
+        c.imageWitness?.hasLidContour&&c.imageWitness.hits>=LIMITS.partialEdgeHits&&c.imageWitness.quadrants>=LIMITS.partialEdgeQuadrants&&
+        c.ellipse?.rx>0&&c.ellipse?.ry>0&&e.path&&dist(e.path,c)<.05?c:null;};
+    for(const direction of [-1,1]){
+      let previous=index,anchorGroup=[];
+      for(let i=index+direction;i>=0&&i<frames.length;i+=direction){
+        const lo=Math.min(previous,i),hi=Math.max(previous,i);
+        if(blocked(frames[lo],frames[hi],side)||Math.abs(frames[i].time-frames[index].time)>LIMITS.partialAnchorDistance+EPS)break;
+        const c=clear(frames[i]);
+        if(c&&(!anchorGroup.length||dist(c,anchorGroup[0].c)<=LIMITS.partialStableDistance))anchorGroup.push({f:frames[i],c});
+        else anchorGroup=[];
+        if(anchorGroup.length>=LIMITS.partialStablePoints&&Math.abs(anchorGroup.at(-1).f.time-anchorGroup[0].f.time)+EPS>=LIMITS.partialStableSpan){
+          const c=anchorGroup[0].c,rx=candidate.ellipse.rx/c.ellipse.rx,ry=candidate.ellipse.ry/c.ellipse.ry;
+          const matchingScale=anchorGroup.every(a=>candidate.ellipse.rx/a.c.ellipse.rx>=.7&&candidate.ellipse.rx/a.c.ellipse.rx<=1.4&&
+            candidate.ellipse.ry/a.c.ellipse.ry>=.7&&candidate.ellipse.ry/a.c.ellipse.ry<=1.4);
+          if(Math.abs(candidate.x-c.x)<=.15&&Math.abs(candidate.y-c.y)<=.10&&matchingScale)
+            return {anchors:anchorGroup.map(a=>a.f.sourceIndex),sameEyeSupport:neighbours.map(i=>frames[i].sourceIndex),
+              anchorSide:direction<0?'before':'after',imageWitness:structuredClone(candidate.imageWitness),
+              ellipseScaleRatio:{x:rx,y:ry},method:'Current iris edges + stable same-eye observations; no extrapolation beyond the archived phase'};
+          break;
+        }
+        previous=i;
+      }
+    }
+    return null;
+  }
   for(const f of frames){
     const e=f[side];
     if(e.ignored||!headGood(f.sample)||!e.evidence.candidates.length){finish();continue;}
@@ -80,10 +127,12 @@ function processEye(frames,side){
     e.flagged=e.flags.length>0;e.proposal=null;
     // Temporal agreement alone cannot override a visible, well-supported eye.
     const anchors=path?.centreVisible===false&&path.supported?partialAnchors(index,path):null;
-    if(e.flagged&&headGood(f.sample)&&path?.supported&&(path.centreVisible!==false||anchors)&&path.runLength>=2&&path.margin>=LIMITS.minMargin&&
+    const sameEye=path?.centreVisible===false&&!anchors?partialSameEyeSupport(index,path):null;
+    if(e.flagged&&headGood(f.sample)&&path?.supported&&(path.centreVisible!==false||anchors||sameEye)&&path.runLength>=2&&path.margin>=LIMITS.minMargin&&
        (!original||dist(path,original)>.035)&&(!oldGood||!original||path.support>original.support+.08)){
-      e.proposal={...structuredClone(path.eye),method:anchors?'Partial iris + temporal anchors':path.method,kind:'estimated',
-        evidence:{support:path.support,anchors,pathMargin:Number.isFinite(path.margin)?path.margin:null,method:'Whole-run bidirectional candidate fitting'}};
+      e.proposal={...structuredClone(path.eye),method:anchors?'Partial iris + temporal anchors':sameEye?'Partial iris + stable same-eye evidence':path.method,kind:'estimated',
+        evidence:{support:path.support,anchors:anchors??sameEye?.anchors??null,sameEyeSupport:sameEye,
+          pathMargin:Number.isFinite(path.margin)?path.margin:null,method:'Whole-run bidirectional candidate fitting'}};
     }
   }
   // Only short, stable, bracketed failures get a temporal-only estimate. Do not
@@ -97,7 +146,7 @@ function processEye(frames,side){
     while(b<frames.length&&!anchor(frames[b])&&!frames[b][side].ignored&&headGood(frames[b].sample))b++;
     if(a<0||b>=frames.length)continue;
     const fa=frames[a],fb=frames[b],ca=anchor(fa),cb=anchor(fb),dt=fb.time-fa.time;
-    if(!ca||!cb||dt>LIMITS.maxBridge||dist(ca,cb)>.06)continue;
+    if(!ca||!cb||dt>LIMITS.maxBridge+EPS||dist(ca,cb)>.06)continue;
     if(frames.slice(a+1,b+1).some((f,k)=>blocked(frames[a+k],f,side)||f.sourceIndex!==frames[a+k].sourceIndex+1))continue;
     // Require stable observed neighbours on both sides, not just two endpoints.
     const before=frames[a-1],after=frames[b+1];
@@ -113,6 +162,13 @@ function processEye(frames,side){
     e.proposal={...structuredClone(base.eye),corrected:2*(ca.x+(cb.x-ca.x)*t),raw:2*q.x-1,
       points:{...structuredClone(p),iris},valid:true,reasons:[],kind:'estimated',method:'Short stable temporal bridge',
       evidence:{anchors:[fa.sourceIndex,fb.sourceIndex],anchorSpan:dt,method:'Bracketed stable estimate; hidden motion cannot be excluded'}};
+  }
+  for(const f of frames){
+    const e=f[side],path=e.path;
+    e.proposalReason=!e.flagged||e.proposal?null:!headGood(f.sample)?'Head tracking is unavailable':
+      !e.evidence.usable?'No clear iris image evidence':path?.centreVisible===false?'The partly hidden iris lacks reliable same-eye support':
+      path?.supported&&path.margin<LIMITS.minMargin?'Several iris positions remain plausible':
+      'No reliable alternative within this continuous eye segment';
   }
 }
 
@@ -147,7 +203,10 @@ export function buildSegmentReview(report){
       report.segments.push({id:side+'-'+first.sourceIndex,side,start:first.time,end:last.time,
         sourceIndices:members.map(f=>f.sourceIndex),flaggedIndices:suspect.map(f=>f.sourceIndex),
         proposedCount:suggestions.length,unresolvedCount:suspect.length-suggestions.length,
-        reasons:[...new Set(suspect.flatMap(f=>f[side].flags))],decision:'unreviewed',decidedAt:null,choiceHistory:[]});group=[];
+        reasons:[...new Set(suspect.flatMap(f=>f[side].flags))],
+        unresolvedReasons:[...new Set(suspect.filter(f=>!f[side].proposal).map(f=>f[side].proposalReason))],
+        proposalMethods:[...new Set(suggestions.map(f=>f[side].proposal.method))],
+        decision:'unreviewed',decidedAt:null,choiceHistory:[]});group=[];
     };
     for(const i of flagged){
       if(group.length){const last=group.at(-1),between=frames.slice(last+1,i+1);
@@ -159,6 +218,10 @@ export function buildSegmentReview(report){
   report.ignoredBlinkEyes=frames.reduce((n,f)=>n+SIDES.filter(s=>f[s].ignored).length,0);
   report.flaggedFrames=frames.filter(f=>SIDES.some(s=>f[s].flagged)).length;
   report.suggestions=report.segments.reduce((n,s)=>n+s.proposedCount,0);
+  report.proposalDiagnostics={methods:{},unresolvedReasons:{}};
+  for(const f of frames)for(const side of SIDES){const e=f[side];if(!e.flagged)continue;
+    const key=e.proposal?e.proposal.method:e.proposalReason,group=e.proposal?report.proposalDiagnostics.methods:report.proposalDiagnostics.unresolvedReasons;
+    group[key]=(group[key]??0)+1;}
   // Keep the provenance, not the large candidate bank, in the saved report.
   for(const f of frames)for(const side of SIDES){const e=f[side];e.path=undefined;e.evidence={contrast:e.evidence.contrast,usable:e.evidence.usable,reason:e.evidence.reason};}
   return report;

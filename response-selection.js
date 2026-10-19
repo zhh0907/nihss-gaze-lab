@@ -1,6 +1,6 @@
 import {eyeUsable} from './eye-quality.js';
-import {THREE_POSITION_RULES} from './three-position.js?v=adaptive19';
-import {TEMPORAL_RULES} from './temporal-gaze.js?v=adaptive19';
+import {THREE_POSITION_RULES} from './three-position.js?v=usability20';
+import {TEMPORAL_RULES} from './temporal-gaze.js?v=usability20';
 
 // Experimental timing/position parameters, not clinical gaze cutoffs. Instruction
 // labels and absolute eye positions are never changed by response detection.
@@ -58,16 +58,34 @@ function firstStable(eyeRows,start,end,seconds){
   return null;
 }
 function baselineEvidence(rows,start,end){
-  const points=rows.filter(r=>r.value!==null),first=points[0],last=points.at(-1);
-  if(!first||!last)return null;
-  // A nominal half-second can contain only 0.375 s of samples at 8 Hz. Judge
-  // the observed continuous span, while keeping both boundary gaps explicit.
-  const evidence=stable(rows,first.time,last.time,.8),leadingGap=first.time-start,trailingGap=end-last.time;
-  const continuous=points.every((row,i)=>!i||(row.index===points[i-1].index+1&&row.time-points[i-1].time<=RESPONSE_RULES.maxSampleGap+EPS));
-  return {...evidence,adequate:evidence.adequate&&continuous&&points.length>=RESPONSE_RULES.minBaselinePoints&&
-    last.time-first.time+EPS>=RESPONSE_RULES.minBaselineSpan&&leadingGap<=RESPONSE_RULES.maxSampleGap+EPS&&trailingGap<=RESPONSE_RULES.maxSampleGap+EPS,
-    nominalWindow:{start,end},observedWindow:{start:first.time,end:last.time},pointCount:points.length,continuous,leadingGap,trailingGap};
+  const cfg=RESPONSE_RULES,runs=[];let run=[];
+  for(const row of rows){
+    const previous=run.at(-1);
+    if(row.value===null||previous&&(row.index!==previous.index+1||row.time-previous.time>cfg.maxSampleGap+EPS)){
+      if(run.length)runs.push(run);run=[];
+    }
+    if(row.value!==null)run.push(row);
+  }
+  if(run.length)runs.push(run);
+  // A single rejected frame need not invalidate a remaining continuous
+  // baseline. Select the latest qualifying run inside the same nominal window;
+  // never join across the rejected frame or expand either boundary.
+  for(let i=runs.length-1;i>=0;i--){
+    const points=runs[i],first=points[0],last=points.at(-1),leadingGap=first.time-start,trailingGap=end-last.time;
+    if(points.length<cfg.minBaselinePoints||last.time-first.time+EPS<cfg.minBaselineSpan||
+      leadingGap>cfg.maxSampleGap+EPS||trailingGap>cfg.maxSampleGap+EPS)continue;
+    const evidence=stable(points,first.time,last.time,.8);
+    if(!evidence.adequate)continue;
+    // A shorter later run can corroborate a reference, but must not be silently
+    // discarded when its visible position contradicts the earlier stable run.
+    if(rows.some(row=>row.time>last.time&&row.value!==null&&Math.abs(row.value-evidence.median)>cfg.stableDrift+EPS))continue;
+    return {...evidence,nominalWindow:{start,end},observedWindow:{start:first.time,end:last.time},
+      pointCount:points.length,continuous:true,leadingGap,trailingGap,referenceIndex:last.index,
+      selection:'Latest qualifying continuous run within the nominal baseline window'};
+  }
+  return null;
 }
+const responseTimingKnown=eye=>['response-detected','no-detected-response'].includes(eye.status);
 function firstChange(rows,baseline,reference,phaseStart){
   const cfg=RESPONSE_RULES;let run=null,lastValid=reference;
   for(let i=0;i<rows.length;i++){
@@ -156,7 +174,7 @@ export function selectResponseWindow(samples,checked,interval,previousInterval=n
     const evidence=rows.length?baselineEvidence(rows,baselineStart,baselineEnd):null;
     const e=response.eyes[side]={status:'baseline-unavailable',baseline:evidence,firstOnset:null,settleStart:null,lateChange:null};
     if(!evidence?.adequate){reject(`${side}: no stable visible reference for response detection.`);continue;}
-    const reference=rows.filter(r=>r.value!==null).at(-1);
+    const reference=rows.find(r=>r.index===evidence.referenceIndex);
     const search=phase==='center'?eyeRows[side].filter(r=>r.time>=baselineEnd-EPS):eyeRows[side];
     Object.assign(e,firstChange(search,evidence.median,reference,interval.start));
     if(e.status==='onset-uncertain')reject(`${side}: the first change crosses missing evidence; it is not a verified delayed response.`);
@@ -166,7 +184,12 @@ export function selectResponseWindow(samples,checked,interval,previousInterval=n
   response.waitingDuration=response.responseStart===null?interval.end-interval.start:response.responseStart-interval.start;
   const searchStart=Math.max(interval.start,...onsetTimes),hold=phase==='center'?cfg.centerStableSeconds:cfg.directionalStableSeconds;
   for(const side of SIDES){
-    const rows=eyeRows[side],e=response.eyes[side],individual=firstStable({left:rows,right:rows},e.firstOnset??interval.start,interval.end,hold);
+    const rows=eyeRows[side],e=response.eyes[side];
+    // Without a baseline or a verified onset, a visible waiting position is not
+    // the first stable response. Keep preview candidates without diagnosing a
+    // normal later turn as a change after that supposed response.
+    if(!responseTimingKnown(e))continue;
+    const individual=firstStable({left:rows,right:rows},e.firstOnset??interval.start,interval.end,hold);
     if(individual){
       e.settleStart=individual.start;e.stableWindow={start:individual.start,end:individual.end};e.stableEvidence=individual.eyes.left;
       const later=lateChange(rows,individual.end,interval.end,individual.eyes.left.median);e.lateChange=later;
@@ -177,8 +200,10 @@ export function selectResponseWindow(samples,checked,interval,previousInterval=n
   // An eye that never moves is still required to be visible and stable here.
   const candidate=firstStable(eyeRows,searchStart,interval.end,hold);
   if(candidate){
-    response.proposedWindow={start:candidate.start,end:candidate.end};response.jointSettleStart=candidate.start;
+    response.proposedWindow={start:candidate.start,end:candidate.end};
+    if(SIDES.every(side=>responseTimingKnown(response.eyes[side])))response.jointSettleStart=candidate.start;
     for(const side of SIDES){
+      if(!responseTimingKnown(response.eyes[side]))continue;
       response.eyes[side].jointStableEvidence=candidate.eyes[side];
       const later=lateChange(eyeRows[side],candidate.end,interval.end,candidate.eyes[side].median);
       if(later&&!response.eyes[side].lateChange){response.eyes[side].lateChange=later;response.lateChangeDetected=true;

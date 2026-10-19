@@ -44,6 +44,26 @@ export function eyeEvidence(image, sample, alternatives, side, config={}) {
   const threshold=dark+contrast*.43;
   let darkCount=0;for(const q of pixels){q.dark=q.g<threshold;darkCount+=Number(q.dark);}
   const usable=contrast>=28&&darkCount>=5&&darkCount/pixels.length<.72;
+  // A clipped dark patch alone does not locate the hidden iris centre. Keep
+  // explicit, current-image boundary evidence for the stricter same-eye
+  // temporal route; it must see dark-inside/light-outside iris edges.
+  function edgeWitness(q,rx,ry){
+    const visible=z=>{
+      const arch=Math.sqrt(Math.max(0,1-((z.x-.5)/.5)**2));
+      return z.x>.025&&z.x<.98&&z.y>cy-opening*.5*arch+.012&&z.y<cy+opening*.5*arch-.012&&inside(z);
+    };
+    const grey=z=>{const p=global(z),x=Math.round(p.x*w),y=Math.round(p.y*h);if(x<0||x>=w||y<0||y>=h)return null;
+      const i=(y*w+x)*4;return .2126*image.data[i]+.7152*image.data[i+1]+.0722*image.data[i+2];};
+    let hits=0,trials=0;const quadrants=new Set();
+    for(let i=0;i<32;i++){
+      const angle=i*Math.PI/16,c=Math.cos(angle),s=Math.sin(angle);
+      const a={x:q.x+rx*c*.8,y:q.y+ry*s*.8},b={x:q.x+rx*c*1.2,y:q.y+ry*s*1.2};
+      if(!visible(a)||!visible(b))continue;
+      const inner=grey(a),outer=grey(b);if(inner===null||outer===null)continue;trials++;
+      if(inner<threshold&&outer>threshold&&outer-inner>=contrast*.25){hits++;quadrants.add(Math.floor(i/8));}
+    }
+    return {hits,trials,quadrants:quadrants.size,hasLidContour:!!outline&&outline.length>=8};
+  }
   function support(q){
     let best={score:0,visible:0,rx:0,ry:0};
     for(const rx of [.09,.14,.19,.24])for(const ry of [.14,.20,.26]){
@@ -64,7 +84,7 @@ export function eyeEvidence(image, sample, alternatives, side, config={}) {
     if(!position||Math.abs(position.corrected)>1.3)return;
     candidates.push({eye:{...structuredClone(eye),...position,points,valid:true,reasons:[]},
       x:position.corrected/2,y:q.y,local:q,method,support:evidence.score,
-      supported:usable&&evidence.score>=.64,ellipse:evidence,centreVisible:inside(q)});
+      supported:usable&&evidence.score>=.64,ellipse:evidence,centreVisible:inside(q),imageWitness:edgeWitness(q,evidence.rx,evidence.ry)});
   }
   if(point(original?.points?.iris))candidate(local(original.points.iris),'Original',original);
   alternatives.forEach((s,i)=>{if(point(s[side]?.points?.iris))candidate(local(s[side].points.iris),i?'Reflected image detection':'Image detection',s[side]);});

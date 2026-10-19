@@ -1,11 +1,11 @@
-import {SEGMENT_VERSION,SIDES,LIMITS,buildSegmentReview} from './segment-review.js?v=adaptive19';
-import {eyeEvidence} from './eye-image-evidence.js?v=segment8';
+import {SEGMENT_VERSION,SIDES,LIMITS,buildSegmentReview} from './segment-review.js?v=usability20';
+import {eyeEvidence} from './eye-image-evidence.js?v=usability20';
 import {bitmapWithDeadline} from './frame-capture.js';
 
 export async function runSelfCheck(clip,{signal,onProgress=()=>{}}={}) {
   const archive=clip.reviewFrames;
   if(!archive?.length)throw Error('No synchronized clean frames are available for this clip. Record a new clip to use image self-check.');
-  const worker=new Worker('./self-check-worker.js?v=segment8');
+  const worker=new Worker('./self-check-worker.js?v=usability20');
   let nextId=0,pending=null;
   const abort=()=>{pending?.reject(new DOMException('Self-check stopped.','AbortError'));worker.terminate();};
   signal?.addEventListener('abort',abort,{once:true});

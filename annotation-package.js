@@ -1,4 +1,4 @@
-import {annotationQueue,selectedFrame} from './segment-review.js?v=adaptive19';
+import {annotationQueue,selectedFrame} from './segment-review.js?v=usability20';
 
 // ZIP STORE: original blobs are retained, never re-encoded or converted to base64.
 // ZIP64, compression and encryption are intentionally not implemented.

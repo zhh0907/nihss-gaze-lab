@@ -1,12 +1,12 @@
 import {cameraOrientation} from './camera-orientation.js';
-import {runSelfCheck} from './self-check.js?v=adaptive19';
-import {createSelfCheckUI} from './self-check-ui.js?v=adaptive19';
+import {runSelfCheck} from './self-check.js?v=usability20';
+import {createSelfCheckUI} from './self-check-ui.js?v=usability20';
 import {simplifyUI} from './simplify-ui.js?v=spoken16';
 import {eyeUsable,eyeQualityLabel} from './eye-quality.js';
 import {DEFAULTS,VERSION,measureFrame,DisplayFilter} from './geometry.js?v=quality5';
 import {parseIntervals,phaseAt,summarize,scoreNIHSS} from './assessment.js';
 import {demoInput} from './fixtures.js';
-import {GazeRecorder,drawEyeMarkers,extensionFor,recordingCsv,recordingMime} from './recording.js?v=adaptive19';
+import {GazeRecorder,drawEyeMarkers,extensionFor,recordingCsv,recordingMime} from './recording.js?v=usability20';
 import {convertVideo} from './video-export.js?v=repair6';
 import {startLiveLoop} from './live-loop.js?v=live3';
 import {captureVideoFrame,bitmapWithDeadline} from './frame-capture.js?v=live3';
@@ -252,7 +252,7 @@ $('cameraStart').onclick=async()=>{
     applyPreviewOrientation();
     await video.play();if(token!==generation)return;
     sourceInfo.settings={...sourceInfo.settings,width:video.videoWidth,height:video.videoHeight,frameRate:stream.getVideoTracks()[0].getSettings().frameRate};
-    sourceInfo.runtime={build:'adaptive19',browser:navigator.userAgent,frameInput:'canvas-oriented-bitmap'};
+    sourceInfo.runtime={build:'usability20',browser:navigator.userAgent,frameInput:'canvas-oriented-bitmap'};
     stream.getVideoTracks()[0].onended=()=>{stop();status('Camera disconnected. Collected data can still be exported.');};
     await initWorker(token);if(token!==generation)return;
     startTime=performance.now();cameraReady=true;refreshRecordingControls();

@@ -6,18 +6,18 @@ This is horizontal-gaze acquisition for NIHSS Best Gaze research, not a validate
 
 ## Recording timing
 
-`guided-exam-v4` records actual browser speech-start/end events on the raw-video clock. The first speech request occurs in the recording-button gesture. Queued speech does not label samples. After speech ends, there is a movement allowance of 1 second for center and 2 seconds for either side, followed by a 4-second center hold or an 8-second directional hold. Observation starts at the actual speech-start event, so movement during the instruction or allowance is retained too.
+`guided-exam-v4` records actual browser speech-start/end events on the raw-video clock. The first speech request occurs in the recording-button gesture. Queued speech does not label samples. After speech ends, there is a movement allowance of 0.5 seconds for center and 0.75 seconds for either side, followed by a 2.5-second center hold or a 4-second directional hold. Observation starts at the actual speech-start event, so movement during the instruction or allowance is retained too.
 
-The introduction adds 0.5 seconds of preparation. A final 2-second unlabelled buffer follows the right hold. Total duration is 27.5 seconds plus speech and scheduling delay, typically 35–45 seconds. These are acquisition limits, not a claim that every patient can respond in time. If a response leaves too little stable evidence before the phase ends, repeat the recording; the app does not invent a completed response.
+The introduction adds 0.5 seconds of preparation. The final unlabelled cue says `Test complete. You can relax.` Recording waits for its speech-end event, then another 0.75 seconds. Completion cannot be cut off by normal automatic-stop cleanup. Total duration is 13.75 seconds plus speech and scheduling delay, typically about 20–25 seconds. The timing revision is stored as `protocolTiming.id = short-spoken-v1`; older v4 recordings retain their recorded durations. These are acquisition limits, not a claim that every patient can respond in time. If a response leaves too little stable evidence before the phase ends, repeat the recording; the app does not invent a completed response.
 
 Browser speech events do not prove the sound was audible or understood. Speech is not included in the video; microphone access is not requested. Missing speech support rejects a guided start. Speech errors, a 7-second start timeout or a 20-second utterance timeout stop the guide. Early stop, a hidden page or a timer interruption longer than 1.5 seconds also preserves an incomplete clip. The app never silently substitutes a completed visual-only test. Capture timestamps remain attached to their source frames even when inference finishes later; alignment is approximate, not hardware exposure timing.
 
 ## Automatic response windows
 
-`response-selection.js` uses the original instruction labels. Eye motion never relabels the requested direction, and resting eye offset is not reset to zero.
+`response-selection.js` uses the original instruction labels. Eye motion never relabels the requested direction, and resting eye offset is not reset to zero. If the response reference or onset is uncertain, visible waiting positions are not described as verified stable responses or used to infer later changes.
 
 1. Inspect the complete observation from speech start through the hold end. Each eye needs sufficient checked tracking, bounded gaps and a visible tail. Waiting is retained as evidence, not discarded as an unusable lead-in.
-2. Establish a visible reference: the initial center observation, or the preceding phase's tail. A bounded interval between cues is recorded explicitly. A change across missing images or an unsupported reference is not a verified slow response.
+2. Establish a visible reference: the initial center observation, or the preceding phase's tail. A bounded interval between cues is recorded explicitly. Within the original baseline window, the latest sufficiently long continuous stable run may be used; no gap is bridged and later contradictory visible positions are retained. A change across missing images or an unsupported reference is not a verified slow response.
 3. Find each eye's first sustained change. Scan the full phase before marking an eye as having no detected response. One stationary eye remains in the assessment; two stationary eyes are not automatically normal.
 4. Find each eye's stable response and the first joint stable window after both detected onsets. Use 1.5 seconds for center and 2 seconds for left/right. The selector does not maximize excursion or search for a more normal-looking result.
 5. Check subsequent tracking and changes. An earlier plateau cannot hide later movement or a missing endpoint. If the full-observation gate fails, no valid analysis window is supplied.
@@ -27,7 +27,7 @@ Thresholds are experimental engineering parameters, exported in `response.thresh
 - **A · Three positions:** evaluates the midpoint of each accepted stable window. The midpoint must be checked, stable and representative of that window's endpoint.
 - **B · Response window:** evaluates the whole selected stable window. `fixedWindow:true` means the evaluator does not subtract settling time again or use time cells with an endpoint outside the chosen window. It does not mean the window was fixed before observing the response.
 
-The UI shows **Response windows** and seek buttons. **Details** includes per-eye detected onset and stability times on the video clock. Uncertain events are not displayed as verified timings. No manual phase confirmation is required for new guided clips.
+The UI shows **Recorded phases** with Rest/Left/Right buttons, using the original spoken phase times independently of scoring. Each button plays that whole phase in the active eye-motion or video view and stops at its end. Partial phases are labelled. **Details** separately lists accepted scoring windows and per-eye detected onset/stability times on the video clock. Uncertain events are not displayed as verified timings. No manual phase confirmation is required for new guided clips.
 
 Historical v3 clips retain fixed central windows; v1/v2 retain full holds. Unlabelled imported videos retain manual controls. V4 preset `analysisStart`/`analysisEnd` fields are legacy references only and never substitute for a failed response gate.
 

@@ -1,4 +1,4 @@
-import {selectedFrame,sampleAtTime} from './segment-review.js?v=adaptive19';
+import {selectedFrame,sampleAtTime} from './segment-review.js?v=usability20';
 import {drawEyeMarkers} from './recording.js';
 
 const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text)e.textContent=text;if(cls)e.className=cls;return e;};
@@ -48,7 +48,7 @@ export function createSegmentPreview({clip,report,segment,onChoose=()=>{},disabl
     if(disposed||t!==token){image.close();return;}
     const e=f[segment.side],original=selectedFrame(f.sample,f,'original')[segment.side],proposal=selectedFrame(f.sample,f,'proposal')[segment.side];
     drawEyeCrop(cards[0].canvas,image,original,e.original);drawEyeCrop(cards[1].canvas,image,proposal,e.original,!!e.proposal);
-    cards[0].caption.textContent=original?.valid?'':'Unmeasured';cards[1].caption.textContent=proposal?(e.proposal?'Estimate':'Unchanged'):'Unresolved';
+    cards[0].caption.textContent=original?.valid?'':'Unmeasured';cards[1].caption.textContent=proposal?(e.proposal?'Estimate':'Unchanged'):'No reliable estimate';
     seek.value=index;status.textContent=f.time.toFixed(2)+' s';
     image.close();
     if(playing){if(index===frames.length-1){pause();return;}
@@ -100,17 +100,19 @@ export function createReviewedPlayer({clip,report,clipNumber}){
   const seek=el('input');seek.type='range';seek.min=0;seek.max=clip.data.recording.durationSeconds;seek.step=.01;seek.value=0;seek.setAttribute('aria-label','Full video time');
   const status=el('p',null,'hint');status.setAttribute('role','status');
   root.append(select,canvas,video,controls,seek,status);
-  let render=makeReviewRenderer(clip,report,'original'),raf=null,disposed=false,pendingSeek=null;
+  let render=makeReviewRenderer(clip,report,'original'),raf=null,disposed=false,pendingSeek=null,range=null,playToken=0;
   const draw=()=>{if(disposed)return;render(canvas.getContext('2d'),video,video.currentTime);seek.value=video.currentTime;};
-  function loop(){draw();if(!video.paused&&!video.ended&&!disposed)raf=requestAnimationFrame(loop);}
-  function pause(){video.pause();cancelAnimationFrame(raf);play.textContent='Play';play.setAttribute('aria-label','Play full video');}
-  play.onclick=async()=>{if(!video.paused){pause();return;}try{if(video.ended)video.currentTime=0;await video.play();if(disposed)return;play.textContent='Pause';play.setAttribute('aria-label','Pause full video');loop();}catch(e){status.textContent='Cannot play video: '+e.message;}};
+  function loop(){if(range&&video.currentTime>=range.end){video.currentTime=range.end;pause();}draw();if(!video.paused&&!video.ended&&!disposed)raf=requestAnimationFrame(loop);}
+  function pause(){playToken++;video.pause();cancelAnimationFrame(raf);play.textContent='Play';play.setAttribute('aria-label','Play full video');}
+  async function startPlayback(){const token=++playToken;try{if(video.ended||range&&video.currentTime>=range.end)video.currentTime=range?.start??0;await video.play();if(disposed||token!==playToken)return;play.textContent='Pause';play.setAttribute('aria-label','Pause full video');loop();}catch(e){if(token===playToken)status.textContent='Cannot play video: '+e.message;}}
+  play.onclick=()=>{if(!video.paused){pause();return;}startPlayback();};
   select.onchange=()=>{render=makeReviewRenderer(clip,report,select.value);draw();};
-  seek.oninput=()=>{pause();video.currentTime=Number(seek.value);};
+  seek.oninput=()=>{pause();range=null;video.currentTime=Number(seek.value);};
   video.onloadeddata=draw;video.onseeked=draw;video.onended=()=>{pause();draw();};
   video.onloadedmetadata=()=>{if(Number.isFinite(video.duration))seek.max=video.duration;if(pendingSeek!==null){video.currentTime=pendingSeek;pendingSeek=null;}};
   video.onerror=()=>{status.textContent='This browser could not decode the recording.';};video.src=clip.rawUrl;
-  draw();return {element:root,pause,getTime:()=>pendingSeek??video.currentTime,seekTime(t){pause();const time=Math.max(0,Math.min(Number(seek.max),t));seek.value=time;if(video.readyState)video.currentTime=time;else pendingSeek=time;},
+  draw();return {element:root,pause,getTime:()=>pendingSeek??video.currentTime,seekTime(t){pause();range=null;const time=Math.max(0,Math.min(Number(seek.max),t));seek.value=time;if(video.readyState)video.currentTime=time;else pendingSeek=time;},
+    playRange(a,b){pause();if(!Number.isFinite(a)||!Number.isFinite(b)||a<0||b<=a||b>Number(seek.max))return;range={start:a,end:b};seek.value=a;if(video.readyState)video.currentTime=a;else pendingSeek=a;startPlayback();},
     refresh(){select.value='selected';render=makeReviewRenderer(clip,report,'selected');draw();},
     dispose(){disposed=true;pause();video.removeAttribute('src');video.load();}};
 }

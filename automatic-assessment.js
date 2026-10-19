@@ -1,7 +1,7 @@
-import {selectedFrame} from './segment-review.js?v=adaptive19';
-import {proposeAutoSelections,checkedWithinAnalysisWindows} from './auto-selection.js?v=adaptive19';
+import {selectedFrame} from './segment-review.js?v=usability20';
+import {proposeAutoSelections,checkedWithinAnalysisWindows} from './auto-selection.js?v=usability20';
 import {threePositionEvidence} from './three-position.js';
-import {temporalGazeEvidence} from './temporal-gaze.js?v=adaptive19';
+import {temporalGazeEvidence} from './temporal-gaze.js?v=usability20';
 
 // The automatic comparison never consumes clinical findings, clinician phase
 // edits or accepted trajectory replacements. A later assisted result is separate.
