@@ -247,11 +247,11 @@ export function chooseSegment(report,id,decision,now=new Date().toISOString()){
   return segment;
 }
 
-export function selectedFrame(sample,review,version='selected'){
+export function selectedFrame(sample,review,version='selected',{includeBufferPositions=false}={}){
   const out=structuredClone(sample);out.reviewKinds={};
   for(const side of SIDES){
     const e=review?.[side];out.reviewKinds[side]='original';
-    if(version==='selected'&&sample.reviewScope==='buffer'){out[side]=null;out.reviewKinds[side]='buffer';continue;}
+    if(version==='selected'&&sample.reviewScope==='buffer'&&!includeBufferPositions){out[side]=null;out.reviewKinds[side]='buffer';continue;}
     if(e?.ignored){out[side]=null;out.reviewKinds[side]='blink';continue;}
     if(version==='selected'&&['closed','not-visible'].includes(e?.decision)){
       out[side]=null;out.reviewKinds[side]=e.decision;continue;

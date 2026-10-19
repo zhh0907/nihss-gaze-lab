@@ -1,6 +1,6 @@
 import {cameraOrientation} from './camera-orientation.js';
 import {runSelfCheck} from './self-check.js?v=usability20';
-import {createSelfCheckUI} from './self-check-ui.js?v=review21';
+import {createSelfCheckUI} from './self-check-ui.js?v=merge22';
 import {simplifyUI} from './simplify-ui.js?v=spoken16';
 import {eyeUsable,eyeQualityLabel} from './eye-quality.js';
 import {DEFAULTS,VERSION,measureFrame,DisplayFilter} from './geometry.js?v=quality5';
@@ -252,7 +252,7 @@ $('cameraStart').onclick=async()=>{
     applyPreviewOrientation();
     await video.play();if(token!==generation)return;
     sourceInfo.settings={...sourceInfo.settings,width:video.videoWidth,height:video.videoHeight,frameRate:stream.getVideoTracks()[0].getSettings().frameRate};
-    sourceInfo.runtime={build:'review21',browser:navigator.userAgent,frameInput:'canvas-oriented-bitmap'};
+    sourceInfo.runtime={build:'merge22',browser:navigator.userAgent,frameInput:'canvas-oriented-bitmap'};
     stream.getVideoTracks()[0].onended=()=>{stop();status('Camera disconnected. Collected data can still be exported.');};
     await initWorker(token);if(token!==generation)return;
     startTime=performance.now();cameraReady=true;refreshRecordingControls();

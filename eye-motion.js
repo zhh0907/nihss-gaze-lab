@@ -1,4 +1,4 @@
-import {selectedFrame,sampleAtTime} from './segment-review.js?v=usability20';
+import {selectedFrame,sampleAtTime} from './segment-review.js?v=merge22';
 import {summarize,scoreNIHSS,phaseAt,NIHSS_SOURCE} from './assessment.js';
 import {eyeUsable} from './eye-quality.js';
 import {threePositionEvidence} from './three-position.js?v=three13';
@@ -15,10 +15,8 @@ export function reviewedSamples(clip,report,version='selected'){
     if(version==='selected'){
       for(const side of ['left','right']){
         const eyeReview=review?.[side];
-        // A live point has not passed image review merely because the tracker
-        // marked it valid. Do not present unchecked or unresolved points as
-        // observed evidence in the default animation. Original comparison data
-        // remains available, and explicit examiner choices keep their meaning.
+        // Scoring requires checked evidence. Playback has its own merged track;
+        // displaying a valid original point does not approve it for assessment.
         if(s.reviewScope==='buffer'){out[side]=null;out.reviewKinds[side]='buffer';}
         else if(!review){out[side]=null;out.reviewKinds[side]='unchecked';}
         else if(!eyeReview?.ignored&&eyeReview?.flagged&&(!eyeReview.decision||eyeReview.decision==='unreviewed')){
@@ -30,6 +28,38 @@ export function reviewedSamples(clip,report,version='selected'){
     if(clip.reviewIntervals){
       const phase=phaseAt(s.rawVideoTimeSeconds,clip.reviewIntervals);
       out.phase=phase.phase;out.phaseStart=s.t-(s.rawVideoTimeSeconds-phase.phaseStart);
+    }
+    return out;
+  });
+}
+
+// Playback merges retained original positions with accepted replacements. Keep
+// this separate from reviewedSamples: archive coverage is a scoring constraint,
+// not a reason to erase valid original motion from the complete recording.
+export function displayMotionSamples(clip,report){
+  const reviews=new Map(report.frames.map(f=>[f.sourceIndex,f]));
+  const spans=(report.segments??[]).filter(s=>s.sourceIndices?.length).map(s=>({
+    side:s.side,decision:s.decision,start:Math.min(...s.sourceIndices),end:Math.max(...s.sourceIndices),
+  }));
+  return clip.data.samples.map((sample,index)=>{
+    const review=reviews.get(index),out=selectedFrame(sample,review,'selected',{includeBufferPositions:true});
+    for(const side of ['left','right']){
+      const eyeReview=review?.[side];
+      if(!eyeReview?.ignored&&eyeReview?.flagged&&(!eyeReview.decision||eyeReview.decision==='unreviewed')){
+        out[side]=null;out.reviewKinds[side]='unresolved';
+      }
+      // New recordings split segments at archive gaps. Older sparse reports
+      // can still contain them: do not flash an unreviewed original back into
+      // a selected replacement or closed-eye interval, and never interpolate.
+      const span=spans.find(s=>s.side===side&&index>=s.start&&index<=s.end);
+      if(!eyeReview?.ignored&&span&&(['closed','not-visible'].includes(span.decision)||!eyeReview&&span.decision!=='original')){
+        out[side]=null;out.reviewKinds[side]=['closed','not-visible','deferred'].includes(span.decision)?span.decision:'unresolved';
+      }
+    }
+    out.valid=eyeUsable(out,'left')&&eyeUsable(out,'right');
+    if(clip.reviewIntervals){
+      const phase=phaseAt(sample.rawVideoTimeSeconds,clip.reviewIntervals);
+      out.phase=phase.phase;out.phaseStart=sample.t-(sample.rawVideoTimeSeconds-phase.phaseStart);
     }
     return out;
   });
@@ -189,21 +219,19 @@ export function drawEyeMotion(ctx,sample,time){
     ctx.strokeStyle='#496071';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x+width/2,y-7);ctx.lineTo(x+width/2,y+7);ctx.stroke();
     if(e.position!==null){
       const px=x+(1+e.position)*width/2;
-      ctx.strokeStyle=ctx.fillStyle=e.kind==='estimated'?'#e4a0ff':color;
-      ctx.beginPath();ctx.arc(px,y,11,0,Math.PI*2);
-      if(e.kind==='estimated'){ctx.setLineDash([4,3]);ctx.lineWidth=4;ctx.stroke();ctx.setLineDash([]);}else ctx.fill();
+      ctx.fillStyle=color;ctx.beginPath();ctx.arc(px,y,11,0,Math.PI*2);ctx.fill();
     }
-    ctx.fillStyle=e.kind==='estimated'?'#e4a0ff':'#c4d6e2';ctx.font='30px system-ui';
-    ctx.fillText(e.position===null?e.label:(e.kind==='estimated'?'~ ':'')+e.position.toFixed(3),x,179,400);
+    ctx.fillStyle='#c4d6e2';ctx.font='30px system-ui';
+    ctx.fillText(e.position===null?e.label:e.position.toFixed(3),x,179,400);
   }
   ctx.fillStyle='#96acbd';ctx.font='28px system-ui';
   ctx.fillText('← Subject-right                   Subject-left →',28,235);
-  ctx.font='25px system-ui';ctx.fillText('Dashed / ~ = estimate · Normalized, not degrees',28,279);
+  ctx.font='25px system-ui';ctx.fillText('Normalized position · Not degrees',28,279);
   ctx.restore();
 }
 
 export function makeEyeMotionRenderer(clip,report){
-  const samples=reviewedSamples(clip,report); // Freeze choices and phases for export.
+  const samples=displayMotionSamples(clip,report); // Freeze choices and phases for export.
   return (ctx,_video,time)=>{const i=sampleAtTime(samples,time);drawEyeMotion(ctx,i<0?null:samples[i],time);};
 }
 
