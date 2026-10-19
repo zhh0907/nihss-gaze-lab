@@ -1,5 +1,5 @@
-import {selectedFrame} from './segment-review.js?v=window18';
-import {proposeAutoSelections} from './auto-selection.js?v=window18';
+import {selectedFrame} from './segment-review.js?v=adaptive19';
+import {proposeAutoSelections} from './auto-selection.js?v=adaptive19';
 
 export const SELECTION_REVIEW_VERSION='guided-selection-review-v1';
 const POSITION_KEYS=['rest','left','right'],PHASE_KEYS=['center','left','right'],BOUNDARIES=['start','end'];
@@ -7,7 +7,7 @@ const runtimeReports=new WeakMap(),EPS=1e-8;
 const copy=value=>structuredClone(value);
 const now=()=>new Date().toISOString();
 const guidedFor=clip=>clip?.data?.recording?.guidedExam;
-const isGuided=clip=>['guided-exam-v1','guided-exam-v2','guided-exam-v3'].includes(guidedFor(clip)?.version);
+const isGuided=clip=>['guided-exam-v1','guided-exam-v2','guided-exam-v3','guided-exam-v4'].includes(guidedFor(clip)?.version);
 const selections=clip=>({threePositionSelection:copy(clip.threePositionSelection??{}),temporalSelection:copy(clip.temporalSelection??{})});
 const freeze=value=>{if(value&&typeof value==='object'){Object.values(value).forEach(freeze);Object.freeze(value);}return value;};
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);

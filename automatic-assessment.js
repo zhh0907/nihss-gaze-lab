@@ -1,13 +1,13 @@
-import {selectedFrame} from './segment-review.js?v=window18';
-import {proposeAutoSelections,checkedWithinAnalysisWindows} from './auto-selection.js?v=window18';
+import {selectedFrame} from './segment-review.js?v=adaptive19';
+import {proposeAutoSelections,checkedWithinAnalysisWindows} from './auto-selection.js?v=adaptive19';
 import {threePositionEvidence} from './three-position.js';
-import {temporalGazeEvidence} from './temporal-gaze.js?v=window18';
+import {temporalGazeEvidence} from './temporal-gaze.js?v=adaptive19';
 
 // The automatic comparison never consumes clinical findings, clinician phase
 // edits or accepted trajectory replacements. A later assisted result is separate.
 export function automaticGazeAssessment(clip,report){
   const guide=clip?.data?.recording?.guidedExam;
-  if(!['guided-exam-v1','guided-exam-v2','guided-exam-v3'].includes(guide?.version)||!report)return null;
+  if(!['guided-exam-v1','guided-exam-v2','guided-exam-v3','guided-exam-v4'].includes(guide?.version)||!report)return null;
   const frames=new Map(report.frames.map(f=>[f.sourceIndex,f]));
   let withheldEyes=0;
   const samples=clip.data.samples.map((sample,index)=>{
@@ -20,10 +20,11 @@ export function automaticGazeAssessment(clip,report){
   const checked=new Set(frames.keys()),duration=clip.data.recording.durationSeconds;
   const selection=proposeAutoSelections(samples,checked,guide,duration);
   selection.provenance.selectionSource='Original checked tracks; automatically flagged eyes excluded; no clinician feedback';
-  const evidenceChecked=guide.version==='guided-exam-v3'?checkedWithinAnalysisWindows(samples,checked,selection.temporalSelection):checked;
+  const fixedWindow=['guided-exam-v3','guided-exam-v4'].includes(guide.version);
+  const evidenceChecked=fixedWindow?checkedWithinAnalysisWindows(samples,checked,selection.temporalSelection):checked;
   const methods={
     threePosition:threePositionEvidence(samples,selection.threePositionSelection,evidenceChecked),
-    temporal:temporalGazeEvidence(samples,selection.temporalSelection,evidenceChecked,duration,{fixedWindow:guide.version==='guided-exam-v3'}),
+    temporal:temporalGazeEvidence(samples,selection.temporalSelection,evidenceChecked,duration,{fixedWindow}),
   };
   return {version:'automatic-gaze-assessment-v1',source:'Original tracks with automatic quality exclusions',
     clinicalInputsUsed:false,manualSelectionsUsed:false,trajectoryReplacementsUsed:false,

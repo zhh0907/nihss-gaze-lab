@@ -1,45 +1,50 @@
-# Spoken gaze recording and automatic assessment
+# Spoken gaze recording and response selection
 
-Start the camera, turn up the sound, then select **Start gaze exam**. The app gives a brief introduction, then asks the patient to look straight ahead, as far left as comfortable, and as far right as comfortable. Recording stops automatically after a final buffer. Directions always refer to the patient, independent of camera choice or preview mirroring. The examiner should present suitable targets; phone screen edges do not define full gaze range.
+Start the camera, turn up the sound, then select **Start gaze exam**. The app asks the patient to look straight ahead, as far left as comfortable, and as far right as comfortable. Directions refer to the patient, independent of the camera or preview mirroring. The examiner should present suitable targets; screen edges do not define full gaze range.
 
-This guides horizontal-gaze acquisition for NIHSS Best Gaze research. It is not the entire NIHSS examination, a validated clinical protocol, or an instruction to perform reflex maneuvers. The examiner must verify that the patient can hear and follow instructions and that the examination is adequate.
+This is horizontal-gaze acquisition for NIHSS Best Gaze research, not a validated clinical protocol or a complete NIHSS examination. The examiner must verify audibility, cooperation and examination adequacy. No reflex maneuver is instructed.
 
-## Timing and failure handling
+## Recording timing
 
-`guided-exam-v3` uses browser speech synthesis. The first speech request occurs in the recording-button gesture. Each instruction's actual speech-start and speech-end events are saved on the raw-video clock. A queued instruction does not label captured samples. After the direction cue ends, the app allows 1 second to move to center or 2 seconds to move left/right. The introduction has only 0.5 seconds of additional preparation.
+`guided-exam-v4` records actual browser speech-start/end events on the raw-video clock. The first speech request occurs in the recording-button gesture. Queued speech does not label samples. After speech ends, there is a movement allowance of 1 second for center and 2 seconds for either side, followed by a 4-second center hold or an 8-second directional hold. Observation starts at the actual speech-start event, so movement during the instruction or allowance is retained too.
 
-| Phase | Recorded hold | Fixed analysis window, relative to hold start |
-| --- | --- | --- |
-| Center | 4 seconds | +1 to +3 seconds |
-| Subject-left | 8 seconds | +2 to +6 seconds |
-| Subject-right | 8 seconds | +2 to +6 seconds |
+The introduction adds 0.5 seconds of preparation. A final 2-second unlabelled buffer follows the right hold. Total duration is 27.5 seconds plus speech and scheduling delay, typically 35–45 seconds. These are acquisition limits, not a claim that every patient can respond in time. If a response leaves too little stable evidence before the phase ends, repeat the recording; the app does not invent a completed response.
 
-After the right hold, recording continues for 2 seconds with an unlabelled finish cue. Total duration is 27.5 seconds plus speech and scheduling delay, typically 35–45 seconds depending on the voice. The final analysis window ends at least 4 seconds before automatic stop, leaving time for a delayed detector result. Ordinary timer jitter can delay the next cue, but never stretches or relocates the fixed analysis window. Early stopping still marks the recording interrupted.
+Browser speech events do not prove the sound was audible or understood. Speech is not included in the video; microphone access is not requested. Missing speech support rejects a guided start. Speech errors, a 7-second start timeout or a 20-second utterance timeout stop the guide. Early stop, a hidden page or a timer interruption longer than 1.5 seconds also preserves an incomplete clip. The app never silently substitutes a completed visual-only test. Capture timestamps remain attached to their source frames even when inference finishes later; alignment is approximate, not hardware exposure timing.
 
-Native speech callbacks indicate browser playback progress, not that sound was audible or understood. Speech is not recorded into the video; microphone access is not requested. Missing speech support rejects a guided start. Speech errors, a 7-second start timeout or a 20-second utterance timeout stop the guide; partial recordings remain incomplete. The app never silently substitutes a completed visual-only test.
+## Automatic response windows
 
-Keep the page visible. Stopping early, hiding the page, or a timer interruption longer than 1.5 seconds ends the guide. Completed intervals remain available; unfinished phases remain incomplete. Analysis samples retain the phase at capture even if inference finishes later. Clock alignment is approximate, not hardware exposure timing.
+`response-selection.js` uses the original instruction labels. Eye motion never relabels the requested direction, and resting eye offset is not reset to zero.
 
-## Automatic A/B results
+1. Inspect the complete observation from speech start through the hold end. Each eye needs sufficient checked tracking, bounded gaps and a visible tail. Waiting is retained as evidence, not discarded as an unusable lead-in.
+2. Establish a visible reference: the initial center observation, or the preceding phase's tail. A bounded interval between cues is recorded explicitly. A change across missing images or an unsupported reference is not a verified slow response.
+3. Find each eye's first sustained change. Scan the full phase before marking an eye as having no detected response. One stationary eye remains in the assessment; two stationary eyes are not automatically normal.
+4. Find each eye's stable response and the first joint stable window after both detected onsets. Use 1.5 seconds for center and 2 seconds for left/right. The selector does not maximize excursion or search for a more normal-looking result.
+5. Check subsequent tracking and changes. An earlier plateau cannot hide later movement or a missing endpoint. If the full-observation gate fails, no valid analysis window is supplied.
 
-- **A · Three positions:** checks the fixed midpoint of each analysis window. It requires a stable, checked local position and adequate whole-window/tail coverage. If the midpoint is missing or does not represent the window endpoint, it abstains rather than moving to another moment.
-- **B · Analysis window:** evaluates the entire fixed interval from `analysisStart` to `analysisEnd`, without an extra settling deduction. Both ends of a time cell must lie inside that interval. Missing tracking within the window remains in the coverage denominator; no missing tail is cropped away.
-- Both eyes are tracked independently. Labels remain unchanged even if the eyes do not move. Resting offset is preserved; observed maximum movement is never normalized into a normal range.
+Thresholds are experimental engineering parameters, exported in `response.thresholds`; they are not clinical response-time or palsy cutoffs. Low frame rates, blinking, occlusion, tremor or a late response can still make the evidence insufficient.
 
-After the local video check, new guided clips open **Eye motion** and show both automatic results. No **Confirm phases**, manual position selection, or method switching is required. Rest/Left/Right buttons only seek to recorded phases. Older videos without guide timing retain manual controls because instructions cannot safely be inferred from movement alone.
+- **A · Three positions:** evaluates the midpoint of each accepted stable window. The midpoint must be checked, stable and representative of that window's endpoint.
+- **B · Response window:** evaluates the whole selected stable window. `fixedWindow:true` means the evaluator does not subtract settling time again or use time cells with an endpoint outside the chosen window. It does not mean the window was fixed before observing the response.
 
-Window timing is set from the instructions before looking at eye positions, not from a detected movement onset. This preserves an instructed left/right phase even when the patient cannot move the eyes. It does not establish that the patient responded on time or reached full excursion. Historical v1/v2 clips retain their original full-hold analysis; buffers are not retrospectively inferred for them.
+The UI shows **Response windows** and seek buttons. **Details** includes per-eye detected onset and stability times on the video clock. Uncertain events are not displayed as verified timings. No manual phase confirmation is required for new guided clips.
 
-`automatic-assessment.js` uses original checked tracks and excludes automatically flagged eye samples. It ignores clinician findings, manual phase changes and accepted replacements. Missing evidence produces abstention, never a normal score. The automatic result stays unchanged when a doctor changes a segment choice.
+Historical v3 clips retain fixed central windows; v1/v2 retain full holds. Unlabelled imported videos retain manual controls. V4 preset `analysisStart`/`analysisEnd` fields are legacy references only and never substitute for a failed response gate.
 
-Suspicious-segment review is optional for viewing automatic A/B results. Completing it enables a separate **Reviewed suggestion** and reviewed video exports. Independent clinician findings produce a separately identified **Examiner result**. These are not interchangeable with the automatic baseline. Reviewed exports still require segment decisions; original recordings remain downloadable. Eye-only playback leaves unreviewed suspicious eyes and unchecked samples blank.
+## Independent and reviewed results
 
-## Data and validation
+`automatic-assessment.js` uses original checked tracks with automatically flagged eye samples excluded. It ignores clinician findings, manual selections and accepted replacements. A doctor changing a segment choice does not change this baseline.
 
-Review JSON schema `gaze-reviewed-motion-9` contains original recording data, guide events and speech metadata, full recorded phase boundaries, fixed analysis boundaries, excluded buffer durations, automatic evidence, review choices, deferred annotation tasks, assisted evidence, and clinician-entered findings separately. Invalid or incomplete v3 windows do not fall back to full-hold analysis.
+Optional segment review creates a separate **Reviewed suggestion**. The response gate is recomputed from the reviewed tracks; old/manual selections cannot bypass it. The available choices are **Keep original**, **Use suggested**, **Both need correction** and **Eye closed**, plus Undo. Both need correction queues later annotation without approving either track. Historical visibility decisions remain readable but are no longer offered as a new option.
 
-Raw and original analysis video remain complete. New guided clips save analysis samples at at most 20 Hz; live tracking and raw-camera frame rate are unchanged. This samples the recorded measurements and matching images together, so checked source indices remain consecutive inside each window. Only window images are archived for self-check, using separate budgets of 8 MiB for center and 20 MiB for each side, at the existing maximum 1280-pixel JPEG resolution and quality 0.94. An early phase cannot exhaust the right phase's budget. Exported coverage includes requested/saved/skipped frames, byte counts and per-phase skip reasons. A phase can still exceed its own budget; such data remains missing, not approved. Buffers appear as **Outside analysis** in reviewed eye-only playback.
+Reviewed exports require segment decisions. Original recordings remain available. Independent clinician findings produce a separately labelled **Examiner result**, not a model prediction. These experimental video rules do not establish a validated NIHSS score.
 
-This release has no cloud upload, LLM, VLM or RL training. A third learned method has not been implemented.
+## Stored evidence and limits
 
-Tests cover speech callbacks, gesture activation, delayed speech and inference, interruptions, missing tails, immobile gaze, clinical-label isolation, export provenance and Chrome recording with synthetic camera input. Browser speech events are scripted in these tests. Mobile layout is checked down to 320 pixels. Physical iPhone/Safari audibility and clinical performance still need separate validation.
+Review JSON schema `gaze-reviewed-motion-9` preserves raw recording data, speech events, observation boundaries, per-eye onset/stability evidence, quality gates, selected windows, thresholds, automatic results, review choices, assisted results and clinician findings separately. Rejected proposed windows remain diagnostic only; they do not supply scoring evidence.
+
+Raw and original analysis videos remain complete. Saved analysis samples and matching source images are captured together at up to 12 Hz; raw-camera video and live tracking are unchanged. Source images are archived across complete observations, including movement and failed detections. Preparation, queued-cue gaps and the final buffer are outside that archive scope. Buffers appear as **Outside analysis** in reviewed eye-only playback.
+
+The 48 MiB image cache reserves 8 MiB for center and 20 MiB for each side. JPEG settings remain maximum 1280-pixel side and quality 0.94. Each phase can still exhaust its own allocation. Exports report requested, saved and skipped frames, byte totals and reasons separately by phase. Missing archive images are not approved evidence. Download clips and annotation packages before refreshing; storage is in browser memory.
+
+This release has no cloud upload, LLM, VLM or RL training. Tests cover delayed and asymmetric responses, stationary eyes, gaps, later changes, timing boundaries, review isolation, and Chrome recording with synthetic camera input and scripted speech events. Mobile layout checks do not replace physical iPhone/Safari or clinical validation.

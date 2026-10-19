@@ -1,7 +1,8 @@
 import {eyeUsable} from './eye-quality.js';
 import {percentile} from './geometry.js';
 import {THREE_POSITION_RULES,threePositionEvidence} from './three-position.js';
-import {TEMPORAL_RULES} from './temporal-gaze.js?v=window18';
+import {TEMPORAL_RULES} from './temporal-gaze.js?v=adaptive19';
+import {selectResponseWindow,RESPONSE_RULES} from './response-selection.js?v=adaptive19';
 
 // Selection uses recorded instructions, never a direction inferred from eye motion.
 // These conservative engineering checks do not establish normal eye movement.
@@ -81,11 +82,12 @@ export function proposeAutoSelections(samples=[],checkedIndices=new Set(samples.
       guidedVersion:guidedExam?.version??null,guidedStatus:guidedExam?.status??null,
       thresholds:{...AUTO_SELECTION_RULES},phases:{},requiresConfirmation:false,
       note:'Recorded instruction labels are retained even when the eyes do not move. No amplitude normalization or reflex inference is performed.'}};
-  if(!guidedExam||!['guided-exam-v1','guided-exam-v2','guided-exam-v3'].includes(guidedExam.version)||!Array.isArray(guidedExam.intervals)){
+  if(!guidedExam||!['guided-exam-v1','guided-exam-v2','guided-exam-v3','guided-exam-v4'].includes(guidedExam.version)||!Array.isArray(guidedExam.intervals)){
     result.issues.push('This clip has no recorded guided-exam timings. Mark the task phases manually.');return result;
   }
-  const fixedWindow=guidedExam.version==='guided-exam-v3';
-  result.provenance.analysisWindowStrategy=fixedWindow?'Fixed recorded analysis window; never shifted or shortened by tracking quality or eye movement.':'Legacy full recorded hold.';
+  const adaptive=guidedExam.version==='guided-exam-v4',fixedWindow=guidedExam.version==='guided-exam-v3'||adaptive;
+  if(adaptive)result.provenance.responseThresholds={...RESPONSE_RULES};
+  result.provenance.analysisWindowStrategy=adaptive?'First verified response and first joint stable window; mandatory full-observation quality and late-change checks.':fixedWindow?'Fixed recorded analysis window; never shifted or shortened by tracking quality or eye movement.':'Legacy full recorded hold.';
   const phases=guidedExam.intervals.filter(r=>PHASES.includes(r?.phase));
   if(PHASES.some(p=>phases.filter(r=>r.phase===p).length>1)){
     result.issues.push('The recorded phase labels are repeated. Review the intervals manually.');return result;
@@ -105,25 +107,42 @@ export function proposeAutoSelections(samples=[],checkedIndices=new Set(samples.
   for(const phase of PHASES){
     const recorded=phases.find(r=>r.phase===phase),interval=completed.find(r=>r.phase===phase);
     const provenance=result.provenance.phases[phase]={completed:!!interval,recordedPhase:recorded?structuredClone(recorded):null};
-    if(!interval){result.issues.push(`${labelFor(phase)} was not completed. Record a new exam.`);continue;}
+    if(!interval){
+      if(adaptive)provenance.response=selectResponseWindow(samples,checkedIndices,recorded??null,null);
+      result.issues.push(`${labelFor(phase)} was not completed. Record a new exam.`);continue;
+    }
     Object.assign(provenance,{promptStart:interval.start,holdStart:interval.holdStart,end:interval.end,
-      recordedHold:{start:interval.holdStart,end:interval.end},strategy:fixedWindow?'fixed-recorded-analysis-window':'legacy-full-recorded-hold'});
-    if(fixedWindow&&(![interval.analysisStart,interval.analysisEnd].every(Number.isFinite)||
+      recordedHold:{start:interval.holdStart,end:interval.end},recordedObservation:{start:interval.start,end:interval.end},
+      strategy:adaptive?'first-response-stability-with-full-observation-gate':fixedWindow?'fixed-recorded-analysis-window':'legacy-full-recorded-hold'});
+    let responseWindow=null;
+    if(adaptive){
+      const previous=ordered[ordered.indexOf(interval)-1]??null;
+      const response=selectResponseWindow(samples,checkedIndices,interval,previous);provenance.response=response;
+      if(!response.adequate){
+        provenance.analysisWindow=null;provenance.validAnalysisWindow=false;
+        result.issues.push(...response.gate.issues.map(issue=>`${labelFor(phase)}: ${issue}`));continue;
+      }
+      responseWindow=response.selectedWindow;
+    }
+    if(fixedWindow&&!adaptive&&(![interval.analysisStart,interval.analysisEnd].every(Number.isFinite)||
       interval.analysisStart<interval.holdStart||interval.analysisEnd<=interval.analysisStart||interval.analysisEnd>interval.end)){
       provenance.analysisWindow=null;provenance.validAnalysisWindow=false;
       result.issues.push(`${labelFor(phase)}: the recorded analysis window is missing or invalid. No full-hold fallback was used.`);continue;
     }
-    const analysisStart=fixedWindow?interval.analysisStart:interval.holdStart,analysisEnd=fixedWindow?interval.analysisEnd:interval.end;
+    const analysisStart=adaptive?responseWindow.start:fixedWindow?interval.analysisStart:interval.holdStart;
+    const analysisEnd=adaptive?responseWindow.end:fixedWindow?interval.analysisEnd:interval.end;
     // Fixed v3 windows include every missing sample inside them. Their external
     // buffers are excluded by recorded timing, never by the observed eye motion.
     result.temporalSelection[phase]={start:analysisStart,end:analysisEnd};
     Object.assign(provenance,{analysisWindow:{start:analysisStart,end:analysisEnd},validAnalysisWindow:true,
-      excludedBufferSeconds:{before:analysisStart-interval.holdStart,after:interval.end-analysisEnd,
+      excludedBufferSeconds:adaptive?null:{before:analysisStart-interval.holdStart,after:interval.end-analysisEnd,
         total:analysisStart-interval.holdStart+interval.end-analysisEnd},
-      endpointReference:fixedWindow?'End of the fixed analysis window':'End of the recorded hold',
-      anchorStrategy:fixedWindow?'Fixed analysis-window midpoint; no search or relocation.':'Legacy stable, endpoint-representative window search.',
+      outsideStableWindowSeconds:adaptive?{before:analysisStart-interval.start,after:interval.end-analysisEnd,
+        note:'These intervals remain mandatory response-gate evidence; they are not discarded.'}:null,
+      endpointReference:adaptive?'Stable-window endpoint, with the full observation tail independently checked':fixedWindow?'End of the fixed analysis window':'End of the recorded hold',
+      anchorStrategy:adaptive?'Midpoint of the first verified stable window; never searched for a more normal result.':fixedWindow?'Fixed analysis-window midpoint; no search or relocation.':'Legacy stable, endpoint-representative window search.',
       requestedAnchor:fixedWindow?(analysisStart+analysisEnd)/2:null,
-      temporalSelection:fixedWindow?'Full fixed analysis window; missing samples do not shorten or move it.':'Full recorded hold; missing samples do not shorten the interval.'});
+      temporalSelection:adaptive?'First joint stable window, valid only with the complete response gate.':fixedWindow?'Full fixed analysis window; missing samples do not shorten or move it.':'Full recorded hold; missing samples do not shorten the interval.'});
     if(!validTimeline)continue;
     const checked=fixedWindow?checkedWithinAnalysisWindows(samples,checkedIndices,{[phase]:result.temporalSelection[phase]}):checkedIndices;
     const quality=phaseQuality(samples,checked,analysisStart,analysisEnd);provenance.quality=quality;

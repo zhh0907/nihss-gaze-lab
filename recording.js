@@ -1,10 +1,11 @@
-import {ReviewArchive} from './review-archive.js?v=window18';
+import {ReviewArchive} from './review-archive.js?v=adaptive19';
 import {eyeUsable,eyeQualityLabel} from './eye-quality.js';
-import {GuidedExam,GuideSpeech,GUIDED_VERSION} from './guided-exam.js?v=window18';
+import {GuidedExam,GuideSpeech,GUIDED_VERSION} from './guided-exam.js?v=adaptive19';
 // All media stays in memory until the user downloads it. Detection frames are
 // copied BEFORE transfer to the worker; overlays never use a newer camera frame.
 export const RECORDING_SCHEMA='gaze-recording-1';
 const GUIDED_SAMPLE_RATE_HZ=20;
+const OBSERVATION_SAMPLE_RATE_HZ=12;
 const GUIDED_PHASE_BYTES=Object.freeze({center:8*1024*1024,left:20*1024*1024,right:20*1024*1024});
 export function recordingMime(Recorder=globalThis.MediaRecorder,format='auto') {
   if(!Recorder)return null;
@@ -76,10 +77,12 @@ export class GazeRecorder {
     const scale=Math.min(1,1280/video.videoWidth,960/video.videoHeight);
     const width=Math.round(video.videoWidth*scale/2)*2,frameHeight=Math.round(video.videoHeight*scale/2)*2;
     canvas.width=width;canvas.height=frameHeight+144;
-    const reviewWindowed=guided&&GUIDED_VERSION==='guided-exam-v3';
+    const reviewObservation=guided&&GUIDED_VERSION==='guided-exam-v4';
+    const reviewWindowed=reviewObservation||(guided&&GUIDED_VERSION==='guided-exam-v3');
     const item={id:crypto.randomUUID(),canvas,frameHeight,width,metadata:structuredClone(metadata),
       startedAt:new Date().toISOString(),phase,frames:[],events:[],errors:[],bytes:0,stopping:false,
-      reviewWindowed,sampleRateLimitHz:reviewWindowed?GUIDED_SAMPLE_RATE_HZ:null,lastSampleTime:null,
+      reviewWindowed,reviewObservation,
+      sampleRateLimitHz:reviewObservation?OBSERVATION_SAMPLE_RATE_HZ:reviewWindowed?GUIDED_SAMPLE_RATE_HZ:null,lastSampleTime:null,
       reviewArchive:new ReviewArchive(48*1024*1024,{phaseQuotas:reviewWindowed?GUIDED_PHASE_BYTES:null})};
     this.current=item;
     const onBytes=n=>{item.bytes+=n;if(item.bytes>256*1024*1024)this.stop('size-limit');};
@@ -137,6 +140,10 @@ export class GazeRecorder {
     const item=this.current;
     if(!this.active||!item.guide)return {phase:'unlabelled',phaseStart:0};
     const rawOrigin=item.startSessionTime+(item.rawStartedPerf-item.startedPerf)/1000;
+    if(item.reviewObservation){
+      const observation=item.guide.observationAt(sessionTime-rawOrigin);
+      return observation?{phase:observation.phase,phaseStart:rawOrigin+observation.start}:{phase:'unlabelled',phaseStart:0};
+    }
     const p=item.guide.phaseAt(sessionTime-rawOrigin);
     return {phase:p.phase,phaseStart:p.phase==='unlabelled'?0:rawOrigin+p.phaseStart};
   }
@@ -153,8 +160,8 @@ export class GazeRecorder {
       if(frame.rawVideoTimeSeconds<0)return;
       if(item.guide){const stage=this.capturePhase(sample.t);frame.phase=stage.phase;frame.phaseStart=stage.phaseStart;}
       if(item.reviewWindowed){
-        const window=item.guide.analysisAt(frame.rawVideoTimeSeconds);
-        frame.reviewScope=window?'analysis':'buffer';
+        const window=item.reviewObservation?item.guide.observationAt(frame.rawVideoTimeSeconds):item.guide.analysisAt(frame.rawVideoTimeSeconds);
+        frame.recordScope=frame.reviewScope=window?(item.reviewObservation?'observation':'analysis'):'buffer';
         if(window)item.reviewArchive.add(image,item.frames.length,window.phase);
       }else item.reviewArchive.add(image,item.frames.length,frame.phase??'unlabelled');
       item.ctx.drawImage(image,0,144,item.width,item.frameHeight);
@@ -204,7 +211,7 @@ export class GazeRecorder {
       analysisWidth:item.canvas.width,analysisHeight:item.canvas.height,analysisFrameHeight:item.frameHeight,analysisFrameOffsetY:144,
       rawInputMirrored:item.metadata.source.inputMirrored??false,analysisMirrored:false,audio:false,
       sampleRateLimitHz:item.sampleRateLimitHz,
-      reviewArchivePolicy:{strategy:item.reviewWindowed?'fixed-analysis-windows':'all-recorded-samples',
+      reviewArchivePolicy:{strategy:item.reviewObservation?'prompt-response-observation':item.reviewWindowed?'fixed-analysis-windows':'all-recorded-samples',
         phaseBudgetsBytes:item.reviewWindowed?{...GUIDED_PHASE_BYTES}:null,limitBytes:item.reviewArchive.limit,
         maximumImageSide:1280,jpegQuality:.94,
         sampling:'Recorded samples and their source images are selected together. Live tracking and raw video are not rate-limited by this policy.'},

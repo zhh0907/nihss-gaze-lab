@@ -1,6 +1,6 @@
 import {eyeUsable} from './eye-quality.js';
 
-export const SEGMENT_VERSION='window18';
+export const SEGMENT_VERSION='adaptive19';
 export const SIDES=['left','right'];
 export const LIMITS=Object.freeze({maxGap:.25,mergeGap:.30,maxBridge:.25,maxPartialSpan:1.6,minSupport:.64,minMargin:.025});
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);

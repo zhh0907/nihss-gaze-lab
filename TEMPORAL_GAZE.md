@@ -2,13 +2,17 @@
 
 Method B is an experimental alternative to Method A (three selected positions). It analyzes labelled rest, subject-left and subject-right intervals on the same reviewed, head-relative eye track. It is a deterministic rule system, not a trained classifier, reinforcement learning, or a validated NIHSS assessment.
 
-## Fixed-window guided recordings (v3)
+## Response windows (v4)
 
-For new guided v3 recordings, B evaluates the middle 2 seconds of the 4-second center hold and middle 4 seconds of each 8-second directional hold. Preparation, movement allowance and recording buffers are excluded before evidence is inspected. `fixedWindow:true` removes the extra settling deduction and disallows time cells whose endpoints lie outside the fixed window. Missing evidence within it still causes abstention. v1/v2 recordings and manually labelled legacy clips retain the full-hold behavior. See [guided recording](GUIDED_EXAM.md) for the exact timing and provenance.
+For new v4 recordings, each spoken cue begins a full observation. `response-selection.js` checks each eye's first response and finds the first jointly stable window (1.5 seconds at center, 2 seconds left/right). A full-observation quality gate, a visible pre-cue reference and a later-change check must pass first. A delayed response can shift this window; missing evidence cannot. An eye that never moves is still included. If no supported stable window fits before the phase ends, the result is insufficient evidence. The `fixedWindow:true` evaluator option means no further settling deduction or boundary extrapolation once this adaptive window has been selected.
+
+## Historical fixed windows (v3)
+
+For historical guided v3 recordings, B evaluates the middle 2 seconds of the 4-second center hold and middle 4 seconds of each 8-second directional hold. Preparation, movement allowance and recording buffers are excluded before evidence is inspected. `fixedWindow:true` removes the extra settling deduction and disallows time cells whose endpoints lie outside the fixed window. Missing evidence within it still causes abstention. v1/v2 recordings and manually labelled legacy clips retain the full-hold behavior. See [guided recording](GUIDED_EXAM.md) for the exact timing and provenance.
 
 ## Use
 
-New [spoken guided recordings](GUIDED_EXAM.md) show **B · Analysis window** alongside A automatically. Windows come from recorded instruction timing and retain tracking gaps within them. Rest/Left/Right previews only seek; no phase confirmation is needed. Automatic analysis excludes flagged eyes and does not consume clinician feedback. Completing optional segment review adds a separate assisted suggestion. The app cannot verify cooperation or adequate targets. Rest is an initial observation, not calibration that resets gaze to zero.
+New [spoken guided recordings](GUIDED_EXAM.md) show **B · Response window** alongside A automatically. Windows use recorded instruction timing, verified movement and stability; the whole response must pass tracking checks. Gaps are retained as missing evidence. Rest/Left/Right previews only seek; no phase confirmation is needed. Automatic analysis excludes flagged eyes and does not consume clinician feedback. Completing optional segment review adds a separate assisted suggestion. The app cannot verify cooperation or adequate targets. Rest is an initial observation, not calibration that resets gaze to zero.
 
 Older clips without guide timing retain manual **Start**/**End** controls and a method selector. Use one non-overlapping interval per direction, at least one second long, based on instructions rather than detected motion. **Details** shows coverage and original/reviewed evidence. New guided clips hide these manual controls. Incomplete recordings remain incomplete; repeat the exam rather than infer a missing instruction from eye movement.
 

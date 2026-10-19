@@ -1,4 +1,4 @@
-import {selectedFrame,sampleAtTime} from './segment-review.js?v=window18';
+import {selectedFrame,sampleAtTime} from './segment-review.js?v=adaptive19';
 import {drawEyeMarkers} from './recording.js';
 
 const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text)e.textContent=text;if(cls)e.className=cls;return e;};

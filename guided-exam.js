@@ -1,6 +1,6 @@
 // Spoken horizontal eye-movement acquisition for NIHSS Best Gaze research.
 // This is not a complete clinical examination or an autonomous NIHSS score.
-export const GUIDED_VERSION='guided-exam-v3';
+export const GUIDED_VERSION='guided-exam-v4';
 export const ANALYSIS_WINDOWS=Object.freeze({
   center:Object.freeze({startOffset:1,endOffset:3}),
   left:Object.freeze({startOffset:2,endOffset:6}),
@@ -65,8 +65,8 @@ export class GuidedExam {
     if(step.kind==='move')this.intervals.push({phase:step.phase,start:time,holdStart:null,end:null,completed:false,analysisStart:null,analysisEnd:null});
     if(step.kind==='hold'){
       const interval=this.intervals.at(-1),window=ANALYSIS_WINDOWS[step.phase];interval.holdStart=time;
-      // Fixed before seeing any eye evidence. Timer jitter, tracking quality or
-      // lack of eye movement cannot move this window to a more convenient time.
+      // Preserve the old preset as a legacy reference only. The final response
+      // interval is selected after recording within the entire spoken phase.
       interval.analysisStart=time+window.startOffset;interval.analysisEnd=time+window.endOffset;
     }
     this.events.push({type:'prompt',phase:step.phase,kind:step.kind,time,title:step.title});
@@ -134,7 +134,19 @@ export class GuidedExam {
     const interval=this.intervals.find(r=>rawTime>=r.start&&(r.end===null||rawTime<r.end));
     return interval?{phase:interval.phase,phaseStart:interval.start}:{phase:'unlabelled',phaseStart:0};
   }
+  observationAt(rawTime){
+    if(!Number.isFinite(rawTime))return null;
+    // Include both phase endpoints, preferring the new phase if adjacent
+    // phases share a boundary. Retained history also labels late inference.
+    for(let i=this.intervals.length-1;i>=0;i--){
+      const interval=this.intervals[i];
+      if(rawTime>=interval.start&&(interval.end===null||rawTime<=interval.end))
+        return {phase:interval.phase,start:interval.start,end:interval.end};
+    }
+    return null;
+  }
   analysisAt(rawTime){
+    // Legacy preset window only, not the final v4 response selection.
     if(!Number.isFinite(rawTime))return null;
     const interval=this.intervals.find(r=>Number.isFinite(r.analysisStart)&&Number.isFinite(r.analysisEnd)&&
       rawTime>=r.analysisStart&&rawTime<=r.analysisEnd&&(r.end===null||rawTime<=r.end));
@@ -149,12 +161,14 @@ export class GuidedExam {
     this.speaker?.cancel();
     return structuredClone({version:GUIDED_VERSION,protocol:'NIHSS Best Gaze horizontal acquisition',status:this.status,intervals:this.intervals,events:this.events,
       endedAt:this.endedAt,directions:'Subject-left and subject-right; independent of camera mirroring.',
-      analysisPolicy:{strategy:'fixed-central-window',windows:ANALYSIS_WINDOWS,
-        selectedBy:'Recorded speech and hold timing only; never tracking quality or inferred eye movement.',
+      analysisPolicy:{strategy:'speech-bounded-response-selection',windows:ANALYSIS_WINDOWS,
+        presetWindowsAreFinal:false,presetUse:'legacy-reference-only',
+        observationBounds:'Each actual spoken direction through its hold end; queued speech and recording buffers are excluded.',
+        selectedBy:'After recording, use observed eye-movement onset and stability within each spoken phase; retained preset windows are not final selections.',
         finalBufferSeconds:2,excludeRecordingBuffers:true},
       speech:{requested:!!this.speaker,started:this.events.filter(e=>e.type==='speech-start').length,finished:this.events.filter(e=>e.type==='speech-end').length,
         confirmation:'Browser speech events only; audibility, patient hearing and task understanding are not verified.'},
-      timing:this.speaker?'Actual browser speech-start events relative to raw recording start; movement allowance begins after speech-end; holdStart marks the displayed hold cue. analysisStart/analysisEnd fix the central assessment window. Queued cues and the final recording buffer are unlabelled.':'Actual on-screen prompt times relative to raw recording start; holdStart marks the displayed hold cue; analysisStart/analysisEnd fix the central assessment window. Visual-only acquisition.',
+      timing:this.speaker?'Actual browser speech-start events relative to raw recording start bound observation through each hold end. Movement allowance begins after speech-end; holdStart marks the displayed hold cue. analysisStart/analysisEnd retain legacy presets, not final response selections. Queued cues and the final recording buffer are unlabelled.':'Actual on-screen prompt times relative to raw recording start bound observation through each hold end; holdStart marks the displayed hold cue. analysisStart/analysisEnd retain legacy presets, not final response selections. Visual-only acquisition.',
       note:'Prompt timing does not prove cooperation, full excursion, adequate examination or a clinical score.'});
   }
 }
