@@ -1,9 +1,10 @@
 import {selectedFrame,sampleAtTime} from './segment-review.js?v=merge22';
 import {summarize,scoreNIHSS,phaseAt,NIHSS_SOURCE} from './assessment.js';
 import {eyeUsable} from './eye-quality.js';
-import {threePositionEvidence} from './three-position.js?v=three13';
-import {temporalGazeEvidence} from './temporal-gaze.js?v=usability20';
-import {proposeAutoSelections} from './auto-selection.js?v=usability20';
+import {threePositionEvidence} from './three-position.js?v=independent23';
+import {temporalGazeEvidence} from './temporal-gaze.js?v=independent23';
+import {proposeAutoSelections} from './auto-selection.js?v=independent23';
+import {applySelectionQuality,checkedForPositions} from './assessment-selection.js?v=independent23';
 
 export const EYE_VIDEO_SIZE=Object.freeze({width:960,height:300});
 
@@ -97,16 +98,18 @@ export function clipGazeSuggestion(clip,report){
   const samples=reviewedSamples(clip,report),originalSamples=reviewedSamples(clip,report,'original');
   const gatedSelections=rows=>{
     if(!adaptive)return {three:clip.threePositionSelection??{},temporal:clip.temporalSelection??{},proposal:null};
-    // Recheck from the current tracks, including callers without a UI review
-    // state. Old/manual fields must not bypass a failed full-observation gate.
+    // Recompute method-specific quality from current tracks. A does not borrow
+    // B's interval or require a verified movement onset.
     const proposal=proposeAutoSelections(rows,checked,clip.data.recording.guidedExam,clip.data.recording.durationSeconds);
     const three={},temporal={};
     for(const phase of ['center','left','right']){
-      const response=proposal.provenance.phases[phase]?.response,window=response?.selectedWindow;
-      if(!response?.adequate||!window)continue;
-      const key=phase==='center'?'rest':phase,anchor=clip.threePositionSelection?.[key],range=clip.temporalSelection?.[phase];
-      if(Number.isFinite(anchor)&&anchor>=window.start&&anchor<=window.end)three[key]=anchor;
-      if(Number.isFinite(range?.start)&&Number.isFinite(range?.end)&&range.start>=window.start&&range.end<=window.end&&range.end>range.start)temporal[phase]={...range};
+      const recorded=proposal.provenance.phases[phase]?.recordedPhase;
+      if(!recorded?.completed)continue;
+      const key=phase==='center'?'rest':phase;
+      const anchor=clip.threePositionSelection?.[key]??proposal.threePositionSelection[key];
+      const range=clip.temporalSelection?.[phase]??proposal.temporalSelection[phase];
+      if(Number.isFinite(anchor)&&anchor>=recorded.start&&anchor<=recorded.end)three[key]=anchor;
+      if(Number.isFinite(range?.start)&&Number.isFinite(range?.end)&&range.start>=recorded.start&&range.end<=recorded.end&&range.end>range.start)temporal[phase]={...range};
     }
     return {three,temporal,proposal};
   };
@@ -132,10 +135,10 @@ export function clipGazeSuggestion(clip,report){
     limitation:'Normalized iris positions are not clinical gaze angles. Research thresholds are not NIHSS cutoffs.'};
   if(pending){result.reasons.push(`Choose a result for ${pending} remaining segment${pending===1?'':'s'} first.`);return result;}
   result.methods={
-    threePosition:{selected:threePositionEvidence(samples,selectedRanges.three,checked),
-      original:threePositionEvidence(originalSamples,originalRanges.three,checked)},
-    temporal:{selected:temporalGazeEvidence(samples,selectedRanges.temporal,checked,clip.data.recording.durationSeconds,{fixedWindow}),
-      original:temporalGazeEvidence(originalSamples,originalRanges.temporal,checked,clip.data.recording.durationSeconds,{fixedWindow})},
+    threePosition:{selected:applySelectionQuality(threePositionEvidence(samples,selectedRanges.three,checkedForPositions(samples,checked,selectedRanges.proposal,selectedRanges.three)),selectedRanges.proposal,'A'),
+      original:applySelectionQuality(threePositionEvidence(originalSamples,originalRanges.three,checkedForPositions(originalSamples,checked,originalRanges.proposal,originalRanges.three)),originalRanges.proposal,'A')},
+    temporal:{selected:applySelectionQuality(temporalGazeEvidence(samples,selectedRanges.temporal,checked,clip.data.recording.durationSeconds,{fixedWindow}),selectedRanges.proposal,'B'),
+      original:applySelectionQuality(temporalGazeEvidence(originalSamples,originalRanges.temporal,checked,clip.data.recording.durationSeconds,{fixedWindow}),originalRanges.proposal,'B')},
   };
   if(adaptive)result.responseSelection=selectedRanges.proposal;
   if(clip.gazeScoringMode==='three-position'){
@@ -162,19 +165,19 @@ export function clipGazeSuggestion(clip,report){
   }
   if(result.temporal){
     const p=result.temporal;result.mode=p.version;result.candidates=p.candidates;result.candidateScore=p.candidateScore;
-    result.title=!p.adequate?'NIHSS · Insufficient evidence':p.candidateScore===null?'NIHSS · Review 1–2':`NIHSS · Possible ${p.candidateScore}`;
+    result.title=!p.adequate?(p.partial?`B · Partial result · ${p.availableEyes}/6 eye measurements`:'B · No usable evidence'):p.candidateScore===null?'NIHSS · Review 1–2':`NIHSS · Possible ${p.candidateScore}`;
     result.reasons=[...p.issues,...p.reasons];
     if(p.adequate&&(result.originalTemporal.adequate!==p.adequate||JSON.stringify(result.originalTemporal.flags)!==JSON.stringify(p.flags)))
       result.reasons.push('Accepted replacements changed the temporal evidence. Compare the original tracking.');
     const estimatedSeconds=Object.values(p.phases).reduce((n,f)=>n+['left','right'].reduce((m,s)=>m+(f[s]?.estimatedSeconds??0),0),0);
     if(estimatedSeconds)result.reasons.push(`${estimatedSeconds.toFixed(2)} eye-seconds include accepted estimates; these are not independent observations.`);
-    result.limitation=adaptive?'Experimental response-window assessment. Selection requires tracking across the full instructed observation and a sustained stable position. Resting offset and absent movement are preserved. Thresholds need clinical validation. No model update is involved.':fixedWindow?'Experimental assessment of fixed central windows. Preparation and recording buffers are excluded; missing tracking within the window remains missing. Thresholds need clinical validation. No model update is involved.':'Experimental time-weighted hold assessment. Position and duration thresholds need clinical validation. Resting offset is preserved. No learned model or RL update is involved.';
+    result.limitation=adaptive?'Experimental sustained-position assessment. Usable eye measurements are retained separately; response timing can remain uncertain. Missing positions are not filled for scoring. Thresholds need clinical validation.':fixedWindow?'Experimental assessment of fixed central windows. Preparation and recording buffers are excluded; missing tracking within the window remains missing. Thresholds need clinical validation. No model update is involved.':'Experimental time-weighted hold assessment. Position and duration thresholds need clinical validation. Resting offset is preserved. No learned model or RL update is involved.';
     return result;
   }
   if(result.threePositions){
     const p=result.threePositions;result.mode='three-position-legacy-rules-v1';
     result.candidates=p.candidates;result.candidateScore=p.candidateScore;
-    result.title=!p.adequate?'NIHSS · Select three positions':p.candidateScore===null?'NIHSS · Review 1–2':`NIHSS · Possible ${p.candidateScore}`;
+    result.title=!p.adequate?(p.partial?`A · Partial result · ${p.availableEyes}/6 eye measurements`:'A · No usable evidence'):p.candidateScore===null?'NIHSS · Review 1–2':`NIHSS · Possible ${p.candidateScore}`;
     result.reasons=[...p.issues,...p.reasons];
     if(p.adequate&&(result.originalThreePositions.adequate!==p.adequate||result.originalThreePositions.legacyRuleScore!==p.legacyRuleScore))
       result.reasons.push('Accepted replacements changed the three-position result. Compare with the original tracking.');

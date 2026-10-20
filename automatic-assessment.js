@@ -1,7 +1,8 @@
 import {selectedFrame} from './segment-review.js?v=usability20';
-import {proposeAutoSelections,checkedWithinAnalysisWindows} from './auto-selection.js?v=usability20';
-import {threePositionEvidence} from './three-position.js';
-import {temporalGazeEvidence} from './temporal-gaze.js?v=usability20';
+import {proposeAutoSelections} from './auto-selection.js?v=independent23';
+import {threePositionEvidence} from './three-position.js?v=independent23';
+import {temporalGazeEvidence} from './temporal-gaze.js?v=independent23';
+import {applySelectionQuality,checkedForPositions} from './assessment-selection.js?v=independent23';
 
 // The automatic comparison never consumes clinical findings, clinician phase
 // edits or accepted trajectory replacements. A later assisted result is separate.
@@ -21,10 +22,9 @@ export function automaticGazeAssessment(clip,report){
   const selection=proposeAutoSelections(samples,checked,guide,duration);
   selection.provenance.selectionSource='Original checked tracks; automatically flagged eyes excluded; no clinician feedback';
   const fixedWindow=['guided-exam-v3','guided-exam-v4'].includes(guide.version);
-  const evidenceChecked=fixedWindow?checkedWithinAnalysisWindows(samples,checked,selection.temporalSelection):checked;
   const methods={
-    threePosition:threePositionEvidence(samples,selection.threePositionSelection,evidenceChecked),
-    temporal:temporalGazeEvidence(samples,selection.temporalSelection,evidenceChecked,duration,{fixedWindow}),
+    threePosition:applySelectionQuality(threePositionEvidence(samples,selection.threePositionSelection,checkedForPositions(samples,checked,selection,selection.threePositionSelection)),selection,'A'),
+    temporal:applySelectionQuality(temporalGazeEvidence(samples,selection.temporalSelection,checked,duration,{fixedWindow}),selection,'B'),
   };
   return {version:'automatic-gaze-assessment-v1',source:'Original tracks with automatic quality exclusions',
     clinicalInputsUsed:false,manualSelectionsUsed:false,trajectoryReplacementsUsed:false,

@@ -1,45 +1,35 @@
-# Method B: temporal hold assessment
+# Method B: sustained movement evidence
 
-Method B is an experimental alternative to Method A (three selected positions). It analyzes labelled rest, subject-left and subject-right intervals on the same reviewed, head-relative eye track. It is a deterministic rule system, not a trained classifier, reinforcement learning, or a validated NIHSS assessment.
+Method B analyzes instructed rest, subject-left and subject-right observations using elapsed time and independent eye measurements. It is a deterministic research baseline, not a trained or validated NIHSS classifier.
 
-## Response windows (v4)
+## Independent selection for v4
 
-For new v4 recordings, each spoken cue begins a full observation. `response-selection.js` checks each eye's first response and finds the first jointly stable window (1.5 seconds at center, 2 seconds left/right). A full-observation quality gate, a visible pre-cue reference and a later-change check must pass first. A delayed response can shift this window; missing evidence cannot. An eye that never moves is still included. If no supported stable window fits before the phase ends, the result is insufficient evidence. The `fixedWindow:true` evaluator option means no further settling deduction or boundary extrapolation once this adaptive window has been selected.
+`method-selection.js` chooses a sustained window representative of each recorded phase. B does not require A's selected position, a verified first movement or the stricter latency diagnostic's full-observation gate. A can have enough short-window evidence while B still lacks a sufficiently sustained hold.
 
-## Historical fixed windows (v3)
+The selector tests windows of 1.5, 1.25, 1.0 and 0.8 seconds, requiring at least 0.7 visible seconds and 75% visible coverage. It distinguishes bounded confirmed blinks from unknown gaps. A supported phase ending and later-change checks remain necessary; a missing extreme-position tail or conflicting later movement cannot be cropped away to obtain a normal result. Selection never maximizes excursion or optimizes a clinical score.
 
-For historical guided v3 recordings, B evaluates the middle 2 seconds of the 4-second center hold and middle 4 seconds of each 8-second directional hold. Preparation, movement allowance and recording buffers are excluded before evidence is inspected. `fixedWindow:true` removes the extra settling deduction and disallows time cells whose endpoints lie outside the fixed window. Missing evidence within it still causes abstention. v1/v2 recordings and manually labelled legacy clips retain the full-hold behavior. See [guided recording](GUIDED_EXAM.md) for the exact timing and provenance.
+`response-selection.js` remains a separate onset/stability diagnostic. Missing baseline data may prevent a verified latency estimate without preventing B from measuring sustained eye position. Recorded instructions supply direction even when an eye does not move.
 
-## Use
+## Temporal measurements
 
-New [spoken guided recordings](GUIDED_EXAM.md) show **B · Response window** alongside A automatically. Windows use recorded instruction timing, verified movement and stability; the whole response must pass tracking checks. Gaps are retained as missing evidence. Rest/Left/Right buttons play the recorded instruction phases, even without an accepted scoring window, and stop at each phase end; no phase confirmation is needed. Automatic analysis excludes flagged eyes and does not consume clinician feedback. Completing optional segment review adds a separate assisted suggestion. The app cannot verify cooperation or adequate targets. Rest is an initial observation, not calibration that resets gaze to zero.
+`temporal-gaze.js` evaluates each eye independently:
 
-Older clips without guide timing retain manual **Start**/**End** controls and a method selector. Use one non-overlapping interval per direction, at least one second long, based on instructions rather than detected motion. **Details** shows coverage and original/reviewed evidence. New guided clips hide these manual controls. Incomplete recordings remain incomplete; repeat the exam rather than infer a missing instruction from eye movement.
+1. Validate ordered, non-overlapping intervals and increasing timestamps. Selected guided windows have no extra settling deduction. Legacy manual/full-hold intervals retain the 0.25-second settling allowance.
+2. Count time only between adjacent checked, usable observations at most 0.25 seconds apart. Missing and blinking samples contribute neither positions nor visible duration. Accepted estimates retain their provenance.
+3. Calculate duration-weighted positions, signed endpoint quantiles and stable holds. Preserve absolute resting offset and measure directional excursion relative to it.
+4. The evaluator requires at least 0.7 valid seconds, 65% usable coverage, no missing run over 0.5 seconds, and 70% coverage in the final 0.5 seconds. The independent selector adds its own stricter window/endpoint checks; these settings are not permission to fill a gap.
+5. Require a continuous endpoint hold of at least 0.4 seconds within a normalized band of ±0.12. Rest spread and brief threshold crossings are checked separately.
 
-## Evidence extraction
+Experimental movement thresholds remain: full signed position 0.40, directional excursion 0.12, resting offset 0.22 and inter-eye excursion difference 0.18. They use half-eye-width units, not degrees, and require clinical calibration. Versioned thresholds and quality decisions are exported.
 
-`temporal-gaze.js` implements `temporal-holds-v1`:
+## Results
 
-1. Require strictly increasing clip timestamps and valid, non-overlapping labelled intervals within the clip. Skip the first 0.25 seconds of each hold as a settling period.
-2. Analyze the two eyes independently. Only adjacent checked, usable observations at most 0.25 seconds apart support duration. Each pair contributes its interval duration and mean normalized position; no extrapolation covers missing frames. Closed, blinking, unresolved and head-rejected observations cannot supply positions. Accepted estimates are retained as a separate provenance category.
-3. Calculate duration-weighted medians and quantiles. For directional holds, use the 90th percentile of the signed position as the robust endpoint. Retain absolute resting offset; derive directional excursion relative to that offset without erasing it.
-4. Require at least 0.7 valid seconds, 75% usable coverage, no missing run longer than 0.3 seconds, and at least 70% coverage in the final 0.5 seconds. A missing extreme-position tail therefore prevents an otherwise well-tracked hold from passing.
-5. Require a continuous stable endpoint hold of at least 0.4 seconds within a normalized band of ±0.12. A position crossing the full-excursion boundary only briefly is inconclusive. Rest also requires a weighted 10th–90th percentile spread no greater than 0.2. Blinks break continuity but do not become centered or abnormal-gaze samples.
-6. Compare the independent eye features using experimental thresholds: full signed position 0.40, directional excursion 0.12, resting offset 0.22, inter-eye excursion difference 0.18. Positions are in half-eye-width units, not degrees. These choices require calibration and validation on separate clinical data; they are not NIHSS cutoffs.
+Usable eye/phase measurements and partial excursions remain visible even when another eye or phase is missing. **Partial** gives an availability count without forcing a complete score. A detected limitation remains a movement finding to review; missing tracking is not itself abnormal gaze.
 
-## Outputs
+Complete evidence may yield **Possible 0**, **Possible 1** or **Review 1–2**. These are experimental suggestions. Score 2 requires independent clinical evidence; the app never infers a reflex result. The [NIHSS instructions](https://www.ninds.nih.gov/sites/default/files/documents/NIH-Stroke-Scale_updatedFeb2024_508.pdf) remain the examination reference.
 
-- **Possible 0:** all three holds have sufficient evidence, both eyes sustain movement in both directions, and no research-threshold flag remains. Subtle palsy is not excluded.
-- **Possible 1:** sufficient evidence shows a sustained limitation, offset or asymmetry that needs clinical confirmation of partial palsy. Tracking error and task performance remain alternative explanations.
-- **Review 1–2:** bilateral non-crossing or conjugate resting offset. This pattern alone does not establish either clinical score.
-- **Insufficient evidence:** missing labels, unstable holds or inadequate tracking. This is not a normal score and not evidence of palsy.
+Automatic comparison uses original checked tracks with flagged eyes excluded. Reviewed choices are assessed separately and cannot alter the automatic baseline. **Details** preserves each eye's measurements, method-specific issues/cautions and source. Rest/Left/Right playback remains available independently of scoring. There is no required manual phase labelling for new guided clips.
 
-All video outputs are suggestions. Exact rule-mapped scores use separately entered clinician findings. In particular, failure to cross the midline does not automatically assign 2, and the system does not infer an oculocephalic reflex result. See the [official NIHSS Best Gaze instructions](https://www.ninds.nih.gov/sites/default/files/documents/NIH-Stroke-Scale_updatedFeb2024_508.pdf).
+Historical v3 recordings retain their fixed analysis intervals; v1/v2 and unlabelled imported clips keep their legacy paths. Raw recordings, samples and previous choices are not overwritten. Review JSON preserves independent selections, partial status, thresholds and supporting indices. No learning or upload occurs.
 
-Published video-gaze work also uses consecutive-frame evidence, including [Pibre et al., 2026](https://www.em-consulte.com/article/1819740/enhancing-pre-hospital-stroke-diagnosis-with-video). This implementation is a separate engineering baseline using elapsed time and per-eye coverage checks; it is not a reproduction of that study or a demonstrated improvement over it. No novelty or clinical accuracy claim is made.
-
-## Provenance and validation
-
-Review JSON schema `gaze-reviewed-motion-9` saves original samples, recorded speech, hold and analysis-window times, both automatic methods with quality exclusions, review choices and assisted evidence separately, plus selections, thresholds and supporting indices. Historical manual-selection provenance remains available for older clips. Source recordings and measurements are not overwritten. Nothing is uploaded.
-
-Automated synthetic fixtures cover different frame rates and cadence, spikes, sustained unilateral restriction, conjugate rest offset, missing extreme-position tails, long gaps, blinks, closure, head rejection, unchecked samples, timing errors, original-data preservation, accepted estimates and clinician-only score 2. Browser checks cover the English controls, method switching, shared timelines, exports and mobile widths from 320 to 768 pixels. These verify software behavior, not clinical accuracy. Physical iPhone/Safari testing and labelled-patient evaluation remain outstanding.
+Synthetic tests cover missing baselines, blinks, short and long gaps, partial eyes/phases, endpoint loss, later changes and original/reviewed separation. Browser tests check English UI and 320–768 px layouts. Clinical accuracy and physical iPhone/Safari validation remain outstanding.

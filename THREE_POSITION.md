@@ -1,14 +1,25 @@
-# Temporary three-position rule
+# Method A: three-position evidence
 
-Method A adapts `code()` / `scoreGaze()` from Honghao's earlier local `NIHSS/index.html`. For new [guided recordings](GUIDED_EXAM.md), the app automatically selects a stable, checked window from each recorded rest/left/right hold. It preserves the instructed direction even if the eyes do not move. The whole hold must have sufficient tracking, including its end; an earlier central position cannot replace a missing extreme-gaze tail. Ranking favors observed, stable evidence representative of the final hold, never larger movement or an expected score.
+Method A adapts the position-code rule from Honghao's earlier local `NIHSS/index.html`. It uses rest, instructed subject-left and instructed subject-right positions, with both eyes measured independently. Resting offset is retained; no patient-specific zero or maximum-range normalization is applied. These are experimental rules, not a clinically validated NIHSS classifier.
 
-New spoken guided clips show A and [B · Full holds](TEMPORAL_GAZE.md) together automatically, without selecting positions or confirming phases. Automatic A uses original checked measurements with suspicious eyes excluded and ignores clinician findings and replacements. Optional segment review adds separate assisted evidence. Older unlabeled clips retain the method selector and manual **Rest**, **Left** and **Right** controls. Video and Eye motion share playback time; originals remain unchanged.
+## Selection
 
-The rule uses each eye independently, with current head-relative corrected measurements and a canonical sign: negative codes mean subject-left. It keeps the original 0.15 and 0.40 boundaries in units of half eye width. Resting offset is preserved, never subtracted as a patient-specific zero. These thresholds have not been clinically calibrated on either system. The original local page is unchanged.
+For [guided v4 recordings](GUIDED_EXAM.md), `method-selection.js` searches short checked windows representative of the visible phase ending. A is independent of B: it does not require B's sustained window, its midpoint, a pre-cue baseline or a verified response onset. It never ranks candidates by larger excursion or a preferred clinical result.
 
-Each selection uses the median of adjacent checked, usable frames within ±0.25 seconds (at least 3 frames spanning 0.1 seconds). The selected instant must itself have usable eyes within 0.12 seconds. Closed, blinking, unresolved, unchecked or head-rejected samples break the window; missing measurements never count as central gaze. Overlapping selections, unstable positions and windows spanning different position codes abstain. This is a robust window adaptation, not an exact numerical reproduction of the old single-frame implementation.
+The selector tests windows of 0.5, 0.35, 0.25 and 0.2 seconds, requiring at least three observed points and 0.15 seconds of visible span. Position stability, endpoint support and conflicting later changes still matter. Brief earlier gaps or confirmed blinks need not reject a clean position window. An unresolved final eye position cannot be replaced by an earlier, more normal-looking position.
 
-Centered rest plus full coded excursions suggests **Possible 0**. Other patterns with midline crossing suggest **Possible 1**. The old rule's output of 2 for failure to cross the midline is retained only in exported provenance as `legacyRuleScore`; the UI shows **Review 1–2**, because these three positions cannot establish the required clinical/reflex findings. Definitive rule-mapped scores still require independent examiner entries. Review choices recompute the selected and original three-position evidence; no learned model or RL update is involved. The JSON export includes the three timestamps, window samples, codes, thresholds, original and selected evidence. Nothing is uploaded.
+`three-position.js` evaluates adjacent checked observations around each selected time, with a maximum radius of 0.25 seconds. The selected eye must be usable near that instant. Gaps, closed eyes and unchecked samples supply no invented position. Each eye retains its own validity, supporting samples and measured median even if the other eye or another phase cannot be assessed.
 
-Validation: automated rule/regression tests and Chrome mobile layout/playback tests, including closure, missing data, unilateral restriction, direction signs, unchanged originals and examiner-only 2. Physical iPhone/Safari testing and clinical accuracy validation remain outstanding.
+Historical guided clips keep their recorded selection strategy. Unlabelled imported clips retain manual Rest/Left/Right controls. Original recordings remain unchanged.
 
+## Rule and partial results
+
+The inherited code boundaries are 0.15 and 0.40 in units of half eye width, not degrees. Negative codes denote subject-left. These boundaries have not been clinically calibrated.
+
+- Complete centered rest and full coded movement in both directions can yield **Possible 0**.
+- Other sufficiently supported patterns may yield **Possible 1** or **Review 1–2**. Three positions cannot establish a reflex response or definitively assign 2.
+- Incomplete evidence yields **Partial**, with available phases and individual-eye measurements, or **No usable evidence**. A missing eye is not treated as centered; no full score is emitted from partial data.
+
+The automatic result uses original checked measurements with flagged eyes excluded. Doctor-selected corrections produce a separate reviewed result. Clinician findings are an independent source, not training labels used by the automatic baseline. JSON preserves raw samples, selections, per-eye status, thresholds and review provenance. No model training or upload occurs.
+
+Synthetic and browser tests verify behavior and mobile layout. They do not establish clinical accuracy or physical iPhone/Safari performance.

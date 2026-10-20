@@ -12,38 +12,38 @@ The introduction adds 0.5 seconds of preparation. The final unlabelled cue says 
 
 Browser speech events do not prove the sound was audible or understood. Speech is not included in the video; microphone access is not requested. Missing speech support rejects a guided start. Speech errors, a 7-second start timeout or a 20-second utterance timeout stop the guide. Early stop, a hidden page or a timer interruption longer than 1.5 seconds also preserves an incomplete clip. The app never silently substitutes a completed visual-only test. Capture timestamps remain attached to their source frames even when inference finishes later; alignment is approximate, not hardware exposure timing.
 
-## Automatic response windows
+## Independent A/B selection
 
-`response-selection.js` uses the original instruction labels. Eye motion never relabels the requested direction, and resting eye offset is not reset to zero. If the response reference or onset is uncertain, visible waiting positions are not described as verified stable responses or used to infer later changes.
+Recorded instructions supply the phase labels. Eye movement never changes the requested direction, and resting offset is never reset to zero.
 
-1. Inspect the complete observation from speech start through the hold end. Each eye needs sufficient checked tracking, bounded gaps and a visible tail. Waiting is retained as evidence, not discarded as an unusable lead-in.
-2. Establish a visible reference: the initial center observation, or the preceding phase's tail. A bounded interval between cues is recorded explicitly. Within the original baseline window, the latest sufficiently long continuous stable run may be used; no gap is bridged and later contradictory visible positions are retained. A change across missing images or an unsupported reference is not a verified slow response.
-3. Find each eye's first sustained change. Scan the full phase before marking an eye as having no detected response. One stationary eye remains in the assessment; two stationary eyes are not automatically normal.
-4. Find each eye's stable response and the first joint stable window after both detected onsets. Use 1.5 seconds for center and 2 seconds for left/right. The selector does not maximize excursion or search for a more normal-looking result.
-5. Check subsequent tracking and changes. An earlier plateau cannot hide later movement or a missing endpoint. If the full-observation gate fails, no valid analysis window is supplied.
+For v4 clips, `method-selection.js` selects evidence separately for each method:
 
-Thresholds are experimental engineering parameters, exported in `response.thresholds`; they are not clinical response-time or palsy cutoffs. Low frame rates, blinking, occlusion, tremor or a late response can still make the evidence insufficient.
+- **A · Three positions** looks for short, checked position windows representative of each phase's visible ending. It does not require B's longer window or a known movement onset.
+- **B · Observation** looks for sustained, checked movement evidence within each phase. It evaluates duration, position, coverage and stability independently of A.
 
-- **A · Three positions:** evaluates the midpoint of each accepted stable window. The midpoint must be checked, stable and representative of that window's endpoint.
-- **B · Response window:** evaluates the whole selected stable window. `fixedWindow:true` means the evaluator does not subtract settling time again or use time cells with an endpoint outside the chosen window. It does not mean the window was fixed before observing the response.
+Each eye is evaluated separately. A visible eye or completed phase remains available when its counterpart is insufficient. A and B can therefore disagree about evidence availability. A shorter clean position window may support A while B still lacks enough sustained evidence.
 
-The UI shows **Recorded phases** with Rest/Left/Right buttons, using the original spoken phase times independently of scoring. Each button plays that whole phase in the active eye-motion or video view and stops at its end. Partial phases are labelled. **Details** separately lists accepted scoring windows and per-eye detected onset/stability times on the video clock. Uncertain events are not displayed as verified timings. No manual phase confirmation is required for new guided clips.
+Confirmed blinks and brief unknown gaps have different bounded tolerances. Missing samples never contribute a position or visible duration; they are not replaced with zero, interpolated, or counted as successful movement. A visible final position and later-change checks prevent an earlier clean interval from concealing an unsupported endpoint or conflicting later movement. Long gaps remain explicit cautions or exclusions according to their location and the method. No selection optimizes movement amplitude or an expected score.
 
-Historical v3 clips retain fixed central windows; v1/v2 retain full holds. Unlabelled imported videos retain manual controls. V4 preset `analysisStart`/`analysisEnd` fields are legacy references only and never substitute for a failed response gate.
+Current selector settings are exported in `methodThresholds`. A tests short windows from 0.5 down to 0.2 seconds; B tests sustained windows from 1.5 down to 0.8 seconds and requires at least 0.7 visible seconds. These are engineering parameters, not clinical cutoffs. Consult `method-selection.js`, `three-position.js` and `temporal-gaze.js` for the exact versioned rules.
 
-## Independent and reviewed results
+`response-selection.js` separately reports onset and settling diagnostics. Its stricter baseline/full-observation checks do **not** gate A or B. An uncertain onset does not mean absent movement, and a failed timing diagnostic does not erase a measured stable position.
 
-`automatic-assessment.js` uses original checked tracks with automatically flagged eye samples excluded. It ignores clinician findings, manual selections and accepted replacements. A doctor changing a segment choice does not change this baseline.
+## Display and review
 
-Optional segment review creates a separate **Reviewed suggestion**. The response gate is recomputed from the reviewed tracks; old/manual selections cannot bypass it. The available choices are **Keep original**, **Use suggested**, **Both need correction** and **Eye closed**, plus Undo. Both need correction queues later annotation without approving either track. Historical visibility decisions remain readable but are no longer offered as a new option.
+**Recorded phases** plays the original Rest/Left/Right intervals in the active video or eye-motion view, stopping at each boundary. These buttons remain usable without a complete score. No manual phase confirmation is required for new guided clips.
 
-Reviewed exports require segment decisions. Original recordings remain available. Independent clinician findings produce a separately labelled **Examiner result**, not a model prediction. These experimental video rules do not establish a validated NIHSS score.
+The automatic comparison uses original checked tracks, excluding automatically flagged eyes. It ignores clinician findings, manual choices and accepted replacements. Optional segment decisions produce separate reviewed results; independent clinician findings remain an examiner result. **Details** identifies the source and shows available positions for each eye, independent method selections, missing-evidence reasons and timing diagnostics.
+
+Complete evidence may produce an experimental **Possible 0**, **Possible 1** or **Review 1–2**. Otherwise **Partial** reports usable phases and eyes without inventing a complete score; **No usable evidence** means no supported measurements were available for that method. Tracking failure is neither normal gaze nor proof of palsy.
+
+Historical v3 clips retain recorded fixed windows; v1/v2 retain their full-hold path. Unlabelled imported clips retain manual controls. V4 `analysisStart`/`analysisEnd` fields are legacy references, not a mandatory shared A/B window.
 
 ## Stored evidence and limits
 
-Review JSON schema `gaze-reviewed-motion-9` preserves raw recording data, speech events, observation boundaries, per-eye onset/stability evidence, quality gates, selected windows, thresholds, automatic results, review choices, assisted results and clinician findings separately. Rejected proposed windows remain diagnostic only; they do not supply scoring evidence.
+Review JSON schema `gaze-reviewed-motion-9` preserves raw recording data, speech events, observation boundaries, per-eye onset/stability diagnostics, independent A/B quality status, partial evidence, selected windows, thresholds, automatic results, review choices, assisted results and clinician findings separately. A window may supply a partial eye measurement without supporting a complete score; its eligibility and exclusions are retained separately.
 
-Raw and original analysis videos remain complete. Saved analysis samples and matching source images are captured together at up to 12 Hz; raw-camera video and live tracking are unchanged. Source images are archived across complete observations, including movement and failed detections. Preparation, queued-cue gaps and the final buffer are outside that archive scope. Buffers appear as **Outside analysis** in reviewed eye-only playback.
+Raw and original analysis videos remain complete. Saved analysis samples and matching source images are captured together at up to 12 Hz; raw-camera video and live tracking are unchanged. Source images are archived across complete observations, including movement and failed detections. Preparation, queued-cue gaps and the final buffer are outside that archive scope. Valid original motion remains visible in the merged eye-only playback, including recording buffers; unchecked samples remain excluded from scoring.
 
 The 48 MiB image cache reserves 8 MiB for center and 20 MiB for each side. JPEG settings remain maximum 1280-pixel side and quality 0.94. Each phase can still exhaust its own allocation. Exports report requested, saved and skipped frames, byte totals and reasons separately by phase. Missing archive images are not approved evidence. Download clips and annotation packages before refreshing; storage is in browser memory.
 

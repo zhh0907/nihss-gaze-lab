@@ -3,8 +3,8 @@ import {eyeUsable} from './eye-quality.js';
 // Experimental normalized-position thresholds, not clinical NIHSS cutoffs.
 // All durations use clip timestamps; no assumption of a fixed camera FPS.
 export const TEMPORAL_RULES=Object.freeze({
-  settleSeconds:.25,minValidSeconds:.7,minCoverage:.75,maxSampleGap:.25,
-  maxMissingSeconds:.3,tailSeconds:.5,minTailCoverage:.7,
+  settleSeconds:.25,minValidSeconds:.7,minCoverage:.65,maxSampleGap:.25,
+  maxMissingSeconds:.5,tailSeconds:.5,minTailCoverage:.7,
   minHoldSeconds:.4,holdTolerance:.12,centerSpread:.2,
   fullPosition:.4,minExcursion:.12,restDeviation:.22,maxAsymmetry:.18,
 });
@@ -70,7 +70,8 @@ function eyeEvidence(samples,checked,side,start,end,direction,cfg,fixedWindow=fa
 
 export function temporalGazeEvidence(samples,selection={},checkedIndices=new Set(samples.map((_,i)=>i)),duration,options={fixedWindow:false}){
   const fixedWindow=options?.fixedWindow===true,settleSeconds=fixedWindow?0:TEMPORAL_RULES.settleSeconds;
-  const cfg=TEMPORAL_RULES,result={version:'temporal-holds-v1',adequate:false,candidateScore:null,candidates:[],
+  const cfg=TEMPORAL_RULES,result={version:'temporal-holds-v2',adequate:false,partial:false,
+    availablePhases:[],availableEyes:0,candidateScore:null,candidates:[],
     issues:[],reasons:[],flags:[],phases:{},excursions:{},thresholds:{...cfg,settleSeconds},intervals:[],
     fixedWindow,appliedSettleSeconds:settleSeconds,
     windowStrategy:fixedWindow?'Full fixed analysis window; no additional settling trim; both sample endpoints must be inside it.':'Legacy interval with settling time removed.',
@@ -81,14 +82,15 @@ export function temporalGazeEvidence(samples,selection={},checkedIndices=new Set
   }
   for(const phase of PHASES){
     const r=selection[phase];
-    if(!Number.isFinite(r?.start)||!Number.isFinite(r?.end))result.issues.push(`Mark the start and end of ${label(phase).toLowerCase()}.`);
+    if(!Number.isFinite(r?.start)||!Number.isFinite(r?.end))result.issues.push(`${label(phase)}: no usable assessment interval is available.`);
     else if(r.start<0||r.end<=r.start||Number.isFinite(duration)&&r.end>duration+EPS)result.issues.push(`${label(phase)}: choose an ordered interval within this clip.`);
     else if(r.end-r.start<settleSeconds+cfg.minValidSeconds-EPS)result.issues.push(`${label(phase)}: select a hold of at least ${(settleSeconds+cfg.minValidSeconds).toFixed(2)} s.`);
     else result.intervals.push({phase,start:r.start,end:r.end});
   }
   result.intervals.sort((a,b)=>a.start-b.start);
-  if(result.intervals.some((r,i)=>i&&r.start<result.intervals[i-1].end-EPS))result.issues.push('The three hold intervals must not overlap.');
-  if(result.issues.length)return result;
+  if(result.intervals.some((r,i)=>i&&r.start<result.intervals[i-1].end-EPS)){
+    result.issues.push('The three hold intervals must not overlap.');return result;
+  }
   for(const r of result.intervals){
     const phase=result.phases[r.phase]={start:r.start,end:r.end,analysisStart:r.start+settleSeconds,analysisEnd:r.end};
     for(const side of SIDES){
@@ -96,21 +98,31 @@ export function temporalGazeEvidence(samples,selection={},checkedIndices=new Set
       for(const issue of phase[side].issues)result.issues.push(`${label(r.phase)}, ${side} eye: ${issue}.`);
     }
   }
-  if(result.issues.length)return result;
-  result.adequate=true;
+  result.availablePhases=PHASES.filter(p=>SIDES.every(s=>result.phases[p]?.[s]?.adequate));
+  result.availableEyes=Object.values(result.phases).reduce((n,p)=>n+SIDES.filter(s=>p[s]?.adequate).length,0);
+  result.adequate=result.issues.length===0&&result.availablePhases.length===3;
+  result.partial=result.availableEyes>0&&!result.adequate;
   for(const side of SIDES){
-    const rest=result.phases.center[side].median;
+    const restEye=result.phases.center?.[side],rest=restEye?.adequate?restEye.median:null;
     result.excursions[side]={};
-    if(Math.abs(rest)>cfg.restDeviation)result.flags.push(`${side}:rest-offset`);
+    if(rest!==null&&Math.abs(rest)>cfg.restDeviation)result.flags.push(`${side}:rest-offset`);
     for(const direction of ['left','right']){
-      const e=result.phases[direction][side],sign=direction==='left'?1:-1,excursion=e.endpoint-sign*rest;
+      const e=result.phases[direction]?.[side];
+      if(!e?.adequate)continue;
+      const sign=direction==='left'?1:-1,excursion=rest===null?null:e.endpoint-sign*rest;
       result.excursions[side][direction]=excursion;
-      if(e.endpoint<cfg.fullPosition-EPS||excursion<cfg.minExcursion-EPS)result.flags.push(`${side}:${direction}:limited-movement`);
-      result.reasons.push(`${side==='left'?'Left':'Right'} eye toward subject-${direction}: excursion ${excursion.toFixed(2)}, stable hold ${e.holdSeconds.toFixed(2)} s.`);
+      if(e.endpoint<cfg.fullPosition-EPS||excursion!==null&&excursion<cfg.minExcursion-EPS)result.flags.push(`${side}:${direction}:limited-movement`);
+      result.reasons.push(`${side==='left'?'Left':'Right'} eye toward subject-${direction}: ${excursion===null?'rest reference unavailable':'excursion '+excursion.toFixed(2)}, stable hold ${e.holdSeconds.toFixed(2)} s.`);
     }
   }
   for(const direction of ['left','right']){
-    if(Math.abs(result.excursions.left[direction]-result.excursions.right[direction])>cfg.maxAsymmetry)result.flags.push(`${direction}:asymmetry`);
+    const a=result.excursions.left[direction],b=result.excursions.right[direction];
+    if(Number.isFinite(a)&&Number.isFinite(b)&&Math.abs(a-b)>cfg.maxAsymmetry)result.flags.push(`${direction}:asymmetry`);
+  }
+  if(!result.adequate){
+    result.reasons.unshift(`${result.availablePhases.length}/3 phases and ${result.availableEyes}/6 eye measurements available. No complete score.`);
+    if(result.flags.length)result.reasons.push('Observed flags: '+result.flags.join('; ')+'.');
+    return result;
   }
   const restL=result.phases.center.left.median,restR=result.phases.center.right.median;
   const conjugateOffset=Math.sign(restL)===Math.sign(restR)&&Math.min(Math.abs(restL),Math.abs(restR))>cfg.restDeviation;

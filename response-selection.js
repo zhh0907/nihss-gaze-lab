@@ -1,6 +1,6 @@
 import {eyeUsable} from './eye-quality.js';
-import {THREE_POSITION_RULES} from './three-position.js?v=usability20';
-import {TEMPORAL_RULES} from './temporal-gaze.js?v=usability20';
+import {THREE_POSITION_RULES} from './three-position.js?v=independent23';
+import {TEMPORAL_RULES} from './temporal-gaze.js?v=independent23';
 
 // Experimental timing/position parameters, not clinical gaze cutoffs. Instruction
 // labels and absolute eye positions are never changed by response detection.

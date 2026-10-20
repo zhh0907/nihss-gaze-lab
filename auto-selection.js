@@ -1,8 +1,9 @@
 import {eyeUsable} from './eye-quality.js';
 import {percentile} from './geometry.js';
-import {THREE_POSITION_RULES,threePositionEvidence} from './three-position.js';
-import {TEMPORAL_RULES} from './temporal-gaze.js?v=usability20';
-import {selectResponseWindow,RESPONSE_RULES} from './response-selection.js?v=usability20';
+import {THREE_POSITION_RULES,threePositionEvidence} from './three-position.js?v=independent23';
+import {TEMPORAL_RULES} from './temporal-gaze.js?v=independent23';
+import {selectResponseWindow,RESPONSE_RULES} from './response-selection.js?v=independent23';
+import {selectIndependentPhase,unavailableMethodPhase,METHOD_SELECTION_RULES} from './method-selection.js?v=independent23';
 
 // Selection uses recorded instructions, never a direction inferred from eye motion.
 // These conservative engineering checks do not establish normal eye movement.
@@ -86,8 +87,14 @@ export function proposeAutoSelections(samples=[],checkedIndices=new Set(samples.
     result.issues.push('This clip has no recorded guided-exam timings. Mark the task phases manually.');return result;
   }
   const adaptive=guidedExam.version==='guided-exam-v4',fixedWindow=guidedExam.version==='guided-exam-v3'||adaptive;
-  if(adaptive)result.provenance.responseThresholds={...RESPONSE_RULES};
-  result.provenance.analysisWindowStrategy=adaptive?'First verified response and first joint stable window; mandatory full-observation quality and late-change checks.':fixedWindow?'Fixed recorded analysis window; never shifted or shortened by tracking quality or eye movement.':'Legacy full recorded hold.';
+  if(adaptive){
+    result.version='guided-independent-method-selection-v2';
+    result.provenance.responseThresholds={...RESPONSE_RULES};
+    result.provenance.methodThresholds={...METHOD_SELECTION_RULES};
+    result.methodStatus=Object.fromEntries(['A','B'].map(method=>[method,{complete:false,availablePhases:[],partialPhases:[],
+      phases:Object.fromEntries(PHASES.map(phase=>[phase,unavailableMethodPhase('No valid automatic selection has been established for this phase.')]))}]));
+  }
+  result.provenance.analysisWindowStrategy=adaptive?'A and B independently select endpoint-representative short and sustained evidence. Response latency is a separate diagnostic.':fixedWindow?'Fixed recorded analysis window; never shifted or shortened by tracking quality or eye movement.':'Legacy full recorded hold.';
   const phases=guidedExam.intervals.filter(r=>PHASES.includes(r?.phase));
   if(PHASES.some(p=>phases.filter(r=>r.phase===p).length>1)){
     result.issues.push('The recorded phase labels are repeated. Review the intervals manually.');return result;
@@ -108,7 +115,11 @@ export function proposeAutoSelections(samples=[],checkedIndices=new Set(samples.
     const recorded=phases.find(r=>r.phase===phase),interval=completed.find(r=>r.phase===phase);
     const provenance=result.provenance.phases[phase]={completed:!!interval,recordedPhase:recorded?structuredClone(recorded):null};
     if(!interval){
-      if(adaptive)provenance.response=selectResponseWindow(samples,checkedIndices,recorded??null,null);
+      if(adaptive){
+        provenance.response={...selectResponseWindow(samples,checkedIndices,recorded??null,null),latencyDiagnostic:true};
+        provenance.methods=Object.fromEntries(['A','B'].map(method=>[method,unavailableMethodPhase('This instructed phase was not completed.')]));
+        for(const method of ['A','B'])result.methodStatus[method].phases[phase]=provenance.methods[method];
+      }
       result.issues.push(`${labelFor(phase)} was not completed. Record a new exam.`);continue;
     }
     Object.assign(provenance,{promptStart:interval.start,holdStart:interval.holdStart,end:interval.end,
@@ -117,12 +128,21 @@ export function proposeAutoSelections(samples=[],checkedIndices=new Set(samples.
     let responseWindow=null;
     if(adaptive){
       const previous=ordered[ordered.indexOf(interval)-1]??null;
-      const response=selectResponseWindow(samples,checkedIndices,interval,previous);provenance.response=response;
-      if(!response.adequate){
-        provenance.analysisWindow=null;provenance.validAnalysisWindow=false;
-        result.issues.push(...response.gate.issues.map(issue=>`${labelFor(phase)}: ${issue}`));continue;
+      const response={...selectResponseWindow(samples,checkedIndices,interval,previous),latencyDiagnostic:true};
+      const methods=selectIndependentPhase(samples,checkedIndices,interval,response);
+      Object.assign(provenance,{response,methods,strategy:'independent-endpoint-evidence',
+        analysisWindow:methods.B.selection,validAnalysisWindow:methods.B.scoreEligible,
+        endpointReference:'Latest visible stable phase endpoint; no maximum-excursion search',
+        anchorStrategy:'A selects its own short stable observed run independently of B.',
+        temporalSelection:'B selects its own sustained representative interval independently of onset certainty.',
+        selectedPosition:methods.A.selection?{...methods.A.selection,...methods.A.eyes}:null});
+      for(const method of ['A','B']){
+        result.methodStatus[method].phases[phase]=methods[method];
+        result.issues.push(...methods[method].issues.map(issue=>`${labelFor(phase)}, ${method}: ${issue}`));
       }
-      responseWindow=response.selectedWindow;
+      if(methods.A.selection)result.threePositionSelection[keyFor(phase)]=methods.A.selection.time;
+      if(methods.B.selection)result.temporalSelection[phase]={...methods.B.selection};
+      continue;
     }
     if(fixedWindow&&!adaptive&&(![interval.analysisStart,interval.analysisEnd].every(Number.isFinite)||
       interval.analysisStart<interval.holdStart||interval.analysisEnd<=interval.analysisStart||interval.analysisEnd>interval.end)){
@@ -155,6 +175,14 @@ export function proposeAutoSelections(samples=[],checkedIndices=new Set(samples.
     provenance.selectedPosition=anchor.selected;
   }
   if(guidedExam.status!=='complete')result.issues.push('The guided recording was interrupted. Only completed phases were proposed.');
-  result.complete=guidedExam.status==='complete'&&PHASES.every(p=>Number.isFinite(result.threePositionSelection[keyFor(p)])&&result.temporalSelection[p]);
+  if(adaptive){
+    for(const method of ['A','B']){
+      const status=result.methodStatus[method];
+      status.availablePhases=PHASES.filter(phase=>!!status.phases[phase]?.selection);
+      status.partialPhases=PHASES.filter(phase=>status.phases[phase]?.partial);
+      status.complete=PHASES.every(phase=>status.phases[phase]?.scoreEligible);
+    }
+    result.complete=guidedExam.status==='complete'&&result.methodStatus.A.complete&&result.methodStatus.B.complete;
+  }else result.complete=guidedExam.status==='complete'&&PHASES.every(p=>Number.isFinite(result.threePositionSelection[keyFor(p)])&&result.temporalSelection[p]);
   return result;
 }

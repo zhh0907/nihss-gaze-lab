@@ -1,14 +1,34 @@
 import {chooseSegment,segmentCsv,annotationQueue} from './segment-review.js?v=merge22';
 import {createAnnotationPackage} from './annotation-package.js?v=usability20';
-import {createSegmentPreview,createReviewedPlayer,makeReviewRenderer,reviewedVideoSize} from './segment-player.js?v=merge22';
-import {createEyeMotionPlayer,makeEyeMotionRenderer,clipGazeSuggestion,reviewedSamples,EYE_VIDEO_SIZE} from './eye-motion.js?v=merge22';
+import {createSegmentPreview,createReviewedPlayer,makeReviewRenderer,reviewedVideoSize} from './segment-player.js?v=independent23';
+import {createEyeMotionPlayer,makeEyeMotionRenderer,clipGazeSuggestion,reviewedSamples,EYE_VIDEO_SIZE} from './eye-motion.js?v=independent23';
 import {parseIntervals,NIHSS_SOURCE} from './assessment.js';
 import {recordingMime,extensionFor} from './recording.js';
 import {convertVideo} from './video-export.js';
-import {initializeSelectionReview,refreshAutomaticSelections,editSelection,clearSelections,confirmSelections,recordedPhasePreview} from './selection-review.js?v=usability20';
-import {automaticGazeAssessment} from './automatic-assessment.js?v=usability20';
+import {initializeSelectionReview,refreshAutomaticSelections,editSelection,clearSelections,confirmSelections,recordedPhasePreview} from './selection-review.js?v=independent23';
+import {automaticGazeAssessment} from './automatic-assessment.js?v=independent23';
 
 const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text)e.textContent=text;if(cls)e.className=cls;return e;};
+const phaseEntries=[['center','Rest'],['left','Left'],['right','Right']];
+function evidenceAvailability(evidence){
+  const phases=evidence?.positions??evidence?.phases??{};
+  const available=Array.isArray(evidence?.availablePhases)?evidence.availablePhases.length:
+    Number.isFinite(evidence?.availablePhases)?evidence.availablePhases:
+    Object.values(phases).filter(p=>p.adequate===true||['left','right'].every(side=>p[side]?.adequate===true)).length;
+  const eyes=Number.isFinite(evidence?.availableEyes)?evidence.availableEyes:
+    Object.values(phases).reduce((n,p)=>n+['left','right'].filter(side=>p[side]?.adequate===true||p.adequate===true&&p[side]).length,0);
+  return {phases:available,eyes};
+}
+function evidenceLabel(evidence){
+  if(evidence?.adequate)return evidence.candidateScore===null?'Review 1–2':`Possible ${evidence.candidateScore}`;
+  const available=evidenceAvailability(evidence);
+  return available.eyes||available.phases?`Partial · ${available.phases}/3 phases`:'No usable evidence';
+}
+function eyeEvidenceText(eye,phaseAdequate=false){
+  const value=eye?.median??eye?.endpoint;
+  if(!Number.isFinite(value))return '—';
+  return `${value.toFixed(2)} · ${eye.adequate===true||phaseAdequate?'usable':'limited'}`;
+}
 function field(text,options,value){
   const label=el('label',text),input=el('select');input.setAttribute('aria-label',text);
   for(const [v,t]of options)input.add(new Option(t,v));input.value=value;label.append(input);return {label,input};
@@ -82,17 +102,31 @@ export function createSelfCheckUI({clip,clipNumber,retry,saveBlob,busyMessage=()
     const adaptive=clip.data.recording.guidedExam?.version==='guided-exam-v4';
     const fixedWindow=adaptive||clip.data.recording.guidedExam?.version==='guided-exam-v3';
     const selection=refreshAutomaticSelections(clip,clip.checkReport),r=clipGazeSuggestion(clip,clip.checkReport),automatic=automaticGazeAssessment(clip,clip.checkReport);result.replaceChildren();
-    const title=r.score!==null?`NIHSS · ${r.score}`:r.pending?'NIHSS · Review needed':r.clinical?'NIHSS · Incomplete':r.threePositions||r.temporal?r.title:!r.evidence.adequate?'NIHSS · Not ready':r.candidates.length===1?'NIHSS · Possible 0':'NIHSS · Review 1–2';
-    const short=r.pending?`Review ${r.pending} remaining segments.`:r.score!==null?'Based on examiner findings.':r.clinical?'Complete examiner findings.':r.temporal?(!r.temporal.adequate?r.temporal.issues[0]:'Temporal assessment · clinician confirmation needed.'):r.threePositions?(!r.threePositions.adequate?r.threePositions.issues[0]:'Three-position rule · clinician confirmation needed.'):!r.evidence.adequate?'Check exam phases and coverage.':'Clinician confirmation needed.';
+    const displayReason=(reason,method)=>{
+      if(!reason||!selection)return reason;
+      const match=reason.match(/^Mark (?:the start and end of )?(rest|look left|look right|subject-left|subject-right)(?: in the clip)?\.$/i);
+      if(!match)return reason.replace(/(?:Choose a steady position|Select a steadier moment)\./g,'Review the eye track or record a steadier hold.')
+        .replace('select a checked frame with both eyes visible.','the selected position lacks enough checked eye evidence.');
+      const phase=match[1].toLowerCase()==='rest'?'center':match[1].toLowerCase().includes('left')?'left':'right';
+      const name=phase==='center'?'Rest':phase==='left'?'Left':'Right',recorded=recordedPhasePreview(clip,phase);
+      if(!recorded?.completed)return `${name} was not completed. Record a new exam.`;
+      return `${name} was recorded; ${method==='A'?'no usable position':'no usable observation'} was selected.`;
+    };
+    const activeEvidence=r.temporal??r.threePositions;
+    const title=r.score!==null?`NIHSS · ${r.score}`:r.pending?'NIHSS · Review needed':r.clinical?'NIHSS · Incomplete':activeEvidence?(selection?evidenceLabel(activeEvidence):r.title):!r.evidence.adequate?'NIHSS · Not ready':r.candidates.length===1?'NIHSS · Possible 0':'NIHSS · Review 1–2';
+    const short=r.pending?`Review ${r.pending} remaining segments.`:r.score!==null?'Based on examiner findings.':r.clinical?'Complete examiner findings.':
+      activeEvidence?(!activeEvidence.adequate?displayReason(activeEvidence.issues[0],r.temporal?'B':'A')??'Usable measurements are retained below.':'Clinician confirmation needed.'):
+      !r.evidence.adequate?'Check tracking quality in Details.':'Clinician confirmation needed.';
     if(automatic){
       result.append(el('h4','Automatic comparison'));
       const comparison=el('table');comparison.className='position-values';comparison.setAttribute('aria-label','Automatic algorithm comparison');
       const header=el('tr');for(const text of ['Method','Result'])header.append(el('th',text));comparison.append(header);
-      for(const [key,name]of [['threePosition','A · Three positions'],['temporal',adaptive?'B · Response window':fixedWindow?'B · Analysis window':'B · Full holds']]){
-        const evidence=automatic.methods[key],outcome=!evidence.adequate?'Insufficient evidence':evidence.candidateScore===null?'Review 1–2':`Possible ${evidence.candidateScore}`;
-        const row=el('tr');row.append(el('th',name),el('td',outcome));comparison.append(row);
+      for(const [key,name]of [['threePosition','A · Three positions'],['temporal',adaptive?'B · Observation':fixedWindow?'B · Analysis window':'B · Full holds']]){
+        const evidence=automatic.methods[key],row=el('tr'),cell=el('td',evidenceLabel(evidence));
+        if(!evidence.adequate&&evidence.issues?.length)cell.append(el('p',displayReason(evidence.issues[0],key==='threePosition'?'A':'B'),'hint'));
+        row.append(el('th',name),cell);comparison.append(row);
       }
-      result.append(comparison,el('p',r.pending?`Eye review: ${r.pending} segments. Optional for this comparison; required for reviewed video export.`:'Automatic results use the original tracking.','hint'));
+      result.append(comparison,el('p',r.pending?`Original tracks · ${r.pending} eye segments await review.`:'Original tracks · A and B assess evidence independently.','hint'));
       if(!r.pending)result.append(el('h4',r.clinical?'Examiner result':'Reviewed suggestion'),el('p',title+' · '+short,'hint'));
     }else result.append(el('h4',title),el('p',short,'hint'));
     threePanel.hidden=!!selection||clip.gazeScoringMode!=='three-position';temporalPanel.hidden=!!selection||clip.gazeScoringMode!=='temporal';
@@ -123,64 +157,87 @@ export function createSelfCheckUI({clip,clipNumber,retry,saveBlob,busyMessage=()
     }
     if(r.clinical&&clip.clinicalObservation?.finding==='normal'&&(r.evidence.flags.length||(r.threePositions?.adequate&&r.threePositions.legacyRuleScore!==0)||(r.temporal?.adequate&&r.temporal.flags.length)))result.append(el('p','Video and clinical findings differ.','warning'));
     const more=el('details');more.append(el('summary','Details'));
-    const list=el('ul');for(const reason of r.reasons)list.append(el('li',reason));more.append(list,el('p',r.limitation,'hint'),
-      el('p','The diagram fixes eye width and removes the head image. Pose compensation is approximate; missing positions stay blank. Left/right refer to the subject.','hint'));
+    if(!automatic||r.clinical){
+      const list=el('ul');for(const reason of r.reasons)list.append(el('li',displayReason(reason,r.temporal?'B':'A')));
+      more.append(list,el('p',r.limitation,'hint'));
+    }
+    more.append(el('p','Head-relative positions, not angles. Missing positions stay blank. Left/right refer to the subject.','hint'));
+    function methodDetails(label,evidence,proposal,method){
+      const detail=el('details'),table=el('table');table.className='position-values';
+      detail.append(el('summary',label+' · '+evidenceLabel(evidence)));table.setAttribute('aria-label',label);
+      const head=el('tr');for(const text of ['Phase','Left eye','Right eye'])head.append(el('th',text));table.append(head);
+      const notes=[];
+      for(const [phase,name]of phaseEntries){
+        const key=method==='A'&&phase==='center'?'rest':phase;
+        const measured=(evidence?.positions??evidence?.phases??{})[key];
+        const diagnostic=proposal?.provenance?.phases?.[phase]?.methods?.[method]??proposal?.methodStatus?.[method]?.phases?.[phase];
+        const row=el('tr');row.append(el('th',name));
+        for(const side of ['left','right'])row.append(el('td',eyeEvidenceText(measured?.[side]??diagnostic?.eyes?.[side],measured?.adequate)));
+        table.append(row);
+        const issues=[...new Set([...(diagnostic?.issues??[]),...(diagnostic?.cautions??[])])];
+        if(issues.length)notes.push(name+': '+issues.join(' '));
+      }
+      detail.append(table,el('p','Normalized positions · Usable eye measurements remain visible when a full score is unavailable.','hint'));
+      if(notes.length){const reasons=el('ul');for(const note of notes)reasons.append(el('li',note));detail.append(reasons);}
+      else if(evidence?.issues?.length){const reasons=el('ul');for(const note of evidence.issues)reasons.append(el('li',displayReason(note,method)));detail.append(reasons);}
+      return detail;
+    }
+    if(automatic){
+      more.append(methodDetails('A · Original measurements',automatic.methods.threePosition,automatic.selection,'A'),
+        methodDetails('B · Original measurements',automatic.methods.temporal,automatic.selection,'B'));
+    }
     if(selection){
-      more.append(el('p',adaptive?'Voice prompts set the direction. The first verified response and sustained stable position set the window. Tracking across the whole observation is checked, including its end. No detected movement is retained; missing evidence is not treated as a slow response.':fixedWindow?'Only the displayed central windows are assessed. Preparation, movement allowance and recording buffers are excluded. Directions follow the voice prompts, even without eye movement.':'Both eyes are identified by the tracker. Phase labels come from recorded instructions, even when the eyes do not move. No manual phase labels are needed. Prompt timing does not prove a complete clinical examination.','hint'));
+      more.append(el('p',adaptive?'Recorded prompts set direction. A selects representative positions; B assesses sustained movement independently. Timing uncertainty does not erase usable position evidence.':fixedWindow?'Only the displayed central windows are assessed. Directions follow recorded instructions.':'Recorded instructions provide phase labels.','hint'));
       if(adaptive){
-        const windows=el('p',null,'hint');
-        windows.textContent='Scoring windows: '+[['center','Rest'],['left','Left'],['right','Right']].map(([phase,label])=>{
-          const range=selection.autoProposal?.temporalSelection?.[phase];
-          return label+': '+(range?`${range.start.toFixed(1)}–${range.end.toFixed(1)} s`:'insufficient evidence');
-        }).join(' · ');more.append(windows);
-        const timing=el('table');timing.className='position-values';timing.setAttribute('aria-label','Response timing');
+        // Use the same original-track proposal as the automatic comparison.
+        // Reviewed timing is a different result and must not be mixed into it.
+        const proposal=automatic?.selection??selection.autoProposal;
+        const windows=el('table');windows.className='position-values';windows.setAttribute('aria-label','Original assessment selections');
+        const windowHead=el('tr');for(const text of ['Phase','A position','B interval'])windowHead.append(el('th',text));windows.append(windowHead);
+        for(const [phase,label]of phaseEntries){
+          const time=proposal?.threePositionSelection?.[phase==='center'?'rest':phase],range=proposal?.temporalSelection?.[phase],row=el('tr');
+          row.append(el('th',label),el('td',Number.isFinite(time)?`${time.toFixed(1)} s`:'Unavailable'),
+            el('td',range?`${range.start.toFixed(1)}–${range.end.toFixed(1)} s`:'Unavailable'));windows.append(row);
+        }
+        more.append(windows);
+        const timingDetails=el('details');timingDetails.append(el('summary','Original-track timing'));
+        const timing=el('table');timing.className='position-values';timing.setAttribute('aria-label','Original response timing');
         const header=el('tr');for(const text of ['Phase / eye','First movement','Stable from'])header.append(el('th',text));timing.append(header);
-        for(const [phase,label]of [['center','Rest'],['left','Left'],['right','Right']]){
-          const response=selection.autoProposal?.provenance?.phases?.[phase]?.response;
+        for(const [phase,label]of phaseEntries){
+          const response=proposal?.provenance?.phases?.[phase]?.response;
           for(const side of ['left','right']){
             const eye=response?.eyes?.[side],row=el('tr');
-            const movement=eye?.status==='response-detected'&&Number.isFinite(eye.firstOnset)?eye.firstOnset.toFixed(1)+' s':eye?.status==='no-detected-response'&&response?.adequate?'None detected':'Uncertain';
-            const settled=response?.adequate&&Number.isFinite(eye?.settleStart)?eye.settleStart.toFixed(1)+' s':'Not confirmed';
+            const movement=eye?.status==='response-detected'&&Number.isFinite(eye.firstOnset)?eye.firstOnset.toFixed(1)+' s':
+              eye?.status==='no-detected-response'?(response?.gate?.quality?.[side]?.coverage>=.85?'None detected':'Not detected · limited'):'Uncertain';
+            const settled=Number.isFinite(eye?.settleStart)?eye.settleStart.toFixed(1)+' s'+(response?.adequate?'':' · observed'):'Not established';
             row.append(el('th',`${label} / ${side==='left'?'L':'R'}`),el('td',movement),el('td',settled));timing.append(row);
           }
         }
-        more.append(timing,el('p','Times are measured from the start of the video.','hint'));
+        timingDetails.append(timing,el('p','Times from video start. Observed stability is separate from A/B eligibility. Uncertain onset is not absent movement.','hint'));more.append(timingDetails);
       }
-      if(!automatic&&selection.autoProposal.issues.length){const issues=el('ul');for(const issue of selection.autoProposal.issues)issues.append(el('li',issue));more.append(issues);}
+      if(!automatic&&selection.autoProposal.issues.length){const issues=el('ul');for(const issue of selection.autoProposal.issues)issues.append(el('li',displayReason(issue)));more.append(issues);}
     }
-    if(automatic){more.append(el('p',automatic.limitation,'hint'));
-      if(automatic.selection.issues.length){const issues=el('ul');for(const issue of automatic.selection.issues)issues.append(el('li',issue));more.append(issues);}}
+    if(automatic){
+      const hasMethodDiagnostics=Object.values(automatic.selection.provenance?.phases??{}).some(phase=>phase.methods?.A||phase.methods?.B);
+      if(!hasMethodDiagnostics&&automatic.selection.issues.length){
+        const issues=el('ul');for(const issue of automatic.selection.issues)issues.append(el('li',displayReason(issue)));more.append(issues);
+      }
+    }
     const archive=clip.data.recording.selfCheckFrameCoverage;
     for(const [phase,stats]of Object.entries(archive?.byPhase??{}))if(stats.skipped){
       const name=phase==='center'?'Rest':phase==='left'?'Left':phase==='right'?'Right':'Recording';
       const reasons=Object.keys(stats.skippedReasons??{}).map(reason=>reason.includes('byte-limit')?'image memory limit':reason==='encoder-busy'?'image saving was busy':'image saving failed');
       more.append(el('p',`${name} review images: ${stats.saved} / ${stats.requested} saved (${[...new Set(reasons)].join(', ')}). Unsaved images are not evidence of an eye movement problem.`,'hint'));
     }
-    if(r.threePositions?.codes){
-      const table=el('table');table.className='position-values';table.setAttribute('aria-label','Three-position eye codes');
-      const header=el('tr');for(const text of ['Position','L eye','R eye'])header.append(el('th',text));table.append(header);
-      for(const [key,label]of [['rest','Rest'],['left','Look left'],['right','Look right']]){
-        const row=el('tr');row.append(el('th',label));for(const side of ['left','right'])row.append(el('td',String(r.threePositions.codes[key][side])));table.append(row);
-      }
-      more.append(table,el('p','Codes: −2 / −1 toward subject-left, 0 centered, +1 / +2 toward subject-right.','hint'));
-    }
-    if(r.temporal&&Object.keys(r.temporal.phases).length){
-      const table=el('table');table.className='position-values';table.setAttribute('aria-label','Temporal tracking evidence');
-      const header=el('tr');for(const text of [fixedWindow?'Window / eye':'Hold / eye','Usable','Stable'])header.append(el('th',text));table.append(header);
-      for(const [key,label]of [['center','Rest'],['left','Left'],['right','Right']])for(const side of ['left','right']){
-        const e=r.temporal.phases[key]?.[side];if(!e)continue;
-        const row=el('tr');row.append(el('th',`${label} / ${side==='left'?'L':'R'}`),el('td',`${Math.round(e.coverage*100)}%`),el('td',`${e.holdSeconds.toFixed(2)} s`));table.append(row);
-      }
-      more.append(table);
-    }
     if(r.methods){
       const table=el('table');table.className='position-values';table.setAttribute('aria-label','Algorithm comparison');
-      const header=el('tr');for(const text of ['Method','Original','Reviewed'])header.append(el('th',text));table.append(header);
-      const outcome=e=>!e.adequate?'Not ready':e.candidateScore===null?'Review 1–2':`Possible ${e.candidateScore}`;
-      for(const [key,name]of [['threePosition','A · Three positions'],['temporal','B · Temporal']]){
-        const row=el('tr');row.append(el('th',name),el('td',outcome(r.methods[key].original)),el('td',outcome(r.methods[key].selected)));table.append(row);
+      const header=el('tr');for(const text of ['Method','Original tracks','Reviewed tracks'])header.append(el('th',text));table.append(header);
+      for(const [key,name]of [['threePosition','A'],['temporal','B']]){
+        const row=el('tr');row.append(el('th',name),el('td',evidenceLabel(automatic?.methods?.[key]??r.methods[key].original)),
+          el('td',evidenceLabel(r.methods[key].selected)));table.append(row);
       }
-      more.append(table);
+      more.append(table,methodDetails('A · Reviewed measurements',r.methods.threePosition.selected,r.responseSelection??selection?.autoProposal,'A'),
+        methodDetails('B · Reviewed measurements',r.methods.temporal.selected,r.responseSelection??selection?.autoProposal,'B'));
     }
     const rules=el('p','0: normal. 1: partial palsy or an overcome deviation. 2: forced deviation / total paresis not overcome by the oculocephalic reflex. A clinician must establish the applicable findings.','hint');
     const source=el('a','NIHSS instructions ↗');source.href=NIHSS_SOURCE;source.target='_blank';source.rel='noreferrer';more.append(rules,source);result.append(more);
