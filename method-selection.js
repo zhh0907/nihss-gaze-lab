@@ -1,5 +1,4 @@
 import {eyeUsable} from './eye-quality.js';
-import {THREE_POSITION_RULES} from './three-position.js?v=independent23';
 import {TEMPORAL_RULES} from './temporal-gaze.js?v=independent23';
 
 // Engineering selection parameters. Selection never optimizes a clinical score
@@ -13,9 +12,7 @@ export const METHOD_SELECTION_RULES=Object.freeze({
 });
 const SIDES=['left','right'],EPS=1e-8;
 const missingKinds=new Set(['blink','closed','not-visible','unresolved','deferred','unchecked','buffer']);
-const boundaries=[THREE_POSITION_RULES.center,THREE_POSITION_RULES.full,TEMPORAL_RULES.restDeviation,TEMPORAL_RULES.fullPosition];
 const median=values=>{const a=[...values].sort((x,y)=>x-y);return a.length?(a[Math.floor((a.length-1)/2)]+a[Math.floor(a.length/2)])/2:null;};
-const category=x=>boundaries.map(c=>x<=-c?-1:x>=c?1:0).join(',');
 const usable=(s,side)=>eyeUsable(s,side)&&Math.abs(s[side].corrected)<=1.2&&!missingKinds.has(s.reviewKinds?.[side])&&s.reviewScope!=='buffer';
 
 function rowsFor(samples,checked,side,interval){
@@ -109,7 +106,9 @@ function evaluateWindow(rows,start,end,method,reference){
     if(tail.coverage+EPS<TEMPORAL_RULES.minTailCoverage)issues.push('The end of B’s interval is not sufficiently visible.');
     if(quality.longestVisibleRun+EPS<TEMPORAL_RULES.minHoldSeconds)issues.push('B needs a sustained adjacent visible hold.');
   }
-  if(reference.adequate&&evidence.median!==null&&(Math.abs(evidence.median-reference.median)>cfg.endpointTolerance+EPS||category(evidence.median)!==category(reference.median)))
+  // Measurement agreement is continuous. Tiny noise across a scoring threshold
+  // is handled by score uncertainty, not by discarding visible eye positions.
+  if(reference.adequate&&evidence.median!==null&&Math.abs(evidence.median-reference.median)>cfg.endpointTolerance+EPS)
     issues.push('The window does not represent the later observed endpoint.');
   return {adequate:issues.length===0,status:issues.length?'insufficient':'available',median:evidence.median,
     windowQuality:quality,evidence,endpointReference:reference,issues};
@@ -123,7 +122,7 @@ function visibleReversals(rows,interval,diagnostic){
     if(within.length<3||within.some(r=>r.value===null)||last.time-within[0].time<.15-EPS)continue;
     const evidence=stable(within,within[0].time,last.time);if(!evidence.stable)continue;
     const prior=plateaus.at(-1);
-    if(prior&&Math.abs(prior.median-evidence.median)<=cfg.stableDrift+EPS&&category(prior.median)===category(evidence.median))prior.end=last.time;
+    if(prior&&Math.abs(prior.median-evidence.median)<=cfg.stableDrift+EPS)prior.end=last.time;
     else plateaus.push({start:within[0].time,end:last.time,median:evidence.median});
   }
   let baseline=diagnostic?.baseline?.adequate?diagnostic.baseline.median:null;

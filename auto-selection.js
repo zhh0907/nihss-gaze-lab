@@ -1,9 +1,9 @@
 import {eyeUsable} from './eye-quality.js';
 import {percentile} from './geometry.js';
-import {THREE_POSITION_RULES,threePositionEvidence} from './three-position.js?v=independent23';
+import {THREE_POSITION_RULES,threePositionEvidence} from './three-position.js?v=boundary24';
 import {TEMPORAL_RULES} from './temporal-gaze.js?v=independent23';
-import {selectResponseWindow,RESPONSE_RULES} from './response-selection.js?v=independent23';
-import {selectIndependentPhase,unavailableMethodPhase,METHOD_SELECTION_RULES} from './method-selection.js?v=independent23';
+import {selectResponseWindow,RESPONSE_RULES} from './response-selection.js?v=boundary24';
+import {selectIndependentPhase,unavailableMethodPhase,METHOD_SELECTION_RULES} from './method-selection.js?v=boundary24';
 
 // Selection uses recorded instructions, never a direction inferred from eye motion.
 // These conservative engineering checks do not establish normal eye movement.

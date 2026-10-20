@@ -1,10 +1,10 @@
 import {selectedFrame,sampleAtTime} from './segment-review.js?v=merge22';
 import {summarize,scoreNIHSS,phaseAt,NIHSS_SOURCE} from './assessment.js';
 import {eyeUsable} from './eye-quality.js';
-import {threePositionEvidence} from './three-position.js?v=independent23';
+import {threePositionEvidence} from './three-position.js?v=boundary24';
 import {temporalGazeEvidence} from './temporal-gaze.js?v=independent23';
-import {proposeAutoSelections} from './auto-selection.js?v=independent23';
-import {applySelectionQuality,checkedForPositions} from './assessment-selection.js?v=independent23';
+import {proposeAutoSelections} from './auto-selection.js?v=boundary24';
+import {applySelectionQuality,checkedForPositions} from './assessment-selection.js?v=boundary24';
 
 export const EYE_VIDEO_SIZE=Object.freeze({width:960,height:300});
 
@@ -175,9 +175,11 @@ export function clipGazeSuggestion(clip,report){
     return result;
   }
   if(result.threePositions){
-    const p=result.threePositions;result.mode='three-position-legacy-rules-v1';
+    const p=result.threePositions;result.mode=p.method;
     result.candidates=p.candidates;result.candidateScore=p.candidateScore;
-    result.title=!p.adequate?(p.partial?`A · Partial result · ${p.availableEyes}/6 eye measurements`:'A · No usable evidence'):p.candidateScore===null?'NIHSS · Review 1–2':`NIHSS · Possible ${p.candidateScore}`;
+    result.title=!p.adequate?(p.partial?`A · Partial result · ${p.availableEyes}/6 eye measurements`:'A · No usable evidence'):
+      p.classificationUncertain?`NIHSS · Borderline · ${p.candidates.join('/')}`:
+      p.candidateScore===null?`NIHSS · Review · ${p.candidates.join('/')}`:`NIHSS · Possible ${p.candidateScore}`;
     result.reasons=[...p.issues,...p.reasons];
     if(p.adequate&&(result.originalThreePositions.adequate!==p.adequate||result.originalThreePositions.legacyRuleScore!==p.legacyRuleScore))
       result.reasons.push('Accepted replacements changed the three-position result. Compare with the original tracking.');

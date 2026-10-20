@@ -38,7 +38,7 @@ export function applySelectionQuality(evidence,selection,method){
       }
     }
     if(method==='A'&&part)part.adequate=sides.every(side=>part[side]?.adequate);
-    if(quality.scoreEligible===false||evidence.candidateScore===0&&quality.normalEligible===false)blocked=true;
+    if(quality.scoreEligible===false||(evidence.candidateScore===0||evidence.candidates?.includes(0))&&quality.normalEligible===false)blocked=true;
   }
   evidence.availablePhases=phases.filter(p=>sides.every(side=>data?.[key(p)]?.[side]?.adequate)).map(key);
   evidence.availableEyes=phases.reduce((n,p)=>n+sides.filter(side=>data?.[key(p)]?.[side]?.adequate).length,0);

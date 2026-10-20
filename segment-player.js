@@ -1,6 +1,6 @@
 import {selectedFrame,sampleAtTime} from './segment-review.js?v=merge22';
 import {drawEyeMarkers} from './recording.js?v=review21';
-import {displayMotionSamples} from './eye-motion.js?v=independent23';
+import {displayMotionSamples} from './eye-motion.js?v=boundary24';
 import {eyeUsable} from './eye-quality.js';
 
 const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text)e.textContent=text;if(cls)e.className=cls;return e;};

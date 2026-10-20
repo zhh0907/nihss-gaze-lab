@@ -1,8 +1,8 @@
 import {selectedFrame} from './segment-review.js?v=usability20';
-import {proposeAutoSelections} from './auto-selection.js?v=independent23';
-import {threePositionEvidence} from './three-position.js?v=independent23';
+import {proposeAutoSelections} from './auto-selection.js?v=boundary24';
+import {threePositionEvidence} from './three-position.js?v=boundary24';
 import {temporalGazeEvidence} from './temporal-gaze.js?v=independent23';
-import {applySelectionQuality,checkedForPositions} from './assessment-selection.js?v=independent23';
+import {applySelectionQuality,checkedForPositions} from './assessment-selection.js?v=boundary24';
 
 // The automatic comparison never consumes clinical findings, clinician phase
 // edits or accepted trajectory replacements. A later assisted result is separate.

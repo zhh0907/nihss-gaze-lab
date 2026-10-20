@@ -1,12 +1,12 @@
 import {chooseSegment,segmentCsv,annotationQueue} from './segment-review.js?v=merge22';
 import {createAnnotationPackage} from './annotation-package.js?v=usability20';
-import {createSegmentPreview,createReviewedPlayer,makeReviewRenderer,reviewedVideoSize} from './segment-player.js?v=independent23';
-import {createEyeMotionPlayer,makeEyeMotionRenderer,clipGazeSuggestion,reviewedSamples,EYE_VIDEO_SIZE} from './eye-motion.js?v=independent23';
+import {createSegmentPreview,createReviewedPlayer,makeReviewRenderer,reviewedVideoSize} from './segment-player.js?v=boundary24';
+import {createEyeMotionPlayer,makeEyeMotionRenderer,clipGazeSuggestion,reviewedSamples,EYE_VIDEO_SIZE} from './eye-motion.js?v=boundary24';
 import {parseIntervals,NIHSS_SOURCE} from './assessment.js';
 import {recordingMime,extensionFor} from './recording.js';
 import {convertVideo} from './video-export.js';
-import {initializeSelectionReview,refreshAutomaticSelections,editSelection,clearSelections,confirmSelections,recordedPhasePreview} from './selection-review.js?v=independent23';
-import {automaticGazeAssessment} from './automatic-assessment.js?v=independent23';
+import {initializeSelectionReview,refreshAutomaticSelections,editSelection,clearSelections,confirmSelections,recordedPhasePreview} from './selection-review.js?v=boundary24';
+import {automaticGazeAssessment} from './automatic-assessment.js?v=boundary24';
 
 const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text)e.textContent=text;if(cls)e.className=cls;return e;};
 const phaseEntries=[['center','Rest'],['left','Left'],['right','Right']];
@@ -19,15 +19,21 @@ function evidenceAvailability(evidence){
     Object.values(phases).reduce((n,p)=>n+['left','right'].filter(side=>p[side]?.adequate===true||p.adequate===true&&p[side]).length,0);
   return {phases:available,eyes};
 }
-function evidenceLabel(evidence){
-  if(evidence?.adequate)return evidence.candidateScore===null?'Review 1–2':`Possible ${evidence.candidateScore}`;
+export function evidenceLabel(evidence){
+  if(evidence?.adequate){
+    const candidates=[...new Set((evidence.candidates??[]).filter(Number.isFinite))].sort((a,b)=>a-b).join('/');
+    if(evidence.classificationUncertain)return candidates?`Borderline · ${candidates}`:'Borderline · review';
+    if(Number.isFinite(evidence.candidateScore))return `Possible ${evidence.candidateScore}`;
+    return candidates?`Review · ${candidates}`:'Review required';
+  }
   const available=evidenceAvailability(evidence);
   return available.eyes||available.phases?`Partial · ${available.phases}/3 phases`:'No usable evidence';
 }
 function eyeEvidenceText(eye,phaseAdequate=false){
   const value=eye?.median??eye?.endpoint;
   if(!Number.isFinite(value))return '—';
-  return `${value.toFixed(2)} · ${eye.adequate===true||phaseAdequate?'usable':'limited'}`;
+  const usable=eye.adequate===true||phaseAdequate;
+  return `${value.toFixed(2)} · ${usable?(eye.thresholdAmbiguous||eye.classificationUncertain?'near boundary':'usable'):'limited'}`;
 }
 function field(text,options,value){
   const label=el('label',text),input=el('select');input.setAttribute('aria-label',text);
@@ -113,7 +119,8 @@ export function createSelfCheckUI({clip,clipNumber,retry,saveBlob,busyMessage=()
       return `${name} was recorded; ${method==='A'?'no usable position':'no usable observation'} was selected.`;
     };
     const activeEvidence=r.temporal??r.threePositions;
-    const title=r.score!==null?`NIHSS · ${r.score}`:r.pending?'NIHSS · Review needed':r.clinical?'NIHSS · Incomplete':activeEvidence?(selection?evidenceLabel(activeEvidence):r.title):!r.evidence.adequate?'NIHSS · Not ready':r.candidates.length===1?'NIHSS · Possible 0':'NIHSS · Review 1–2';
+    const fallbackCandidates=(r.candidates??[]).filter(Number.isFinite),fallbackLabel=fallbackCandidates.length===1?`NIHSS · Possible ${fallbackCandidates[0]}`:fallbackCandidates.length?`NIHSS · Review · ${fallbackCandidates.join('/')}`:'NIHSS · Review required';
+    const title=r.score!==null?`NIHSS · ${r.score}`:r.pending?'NIHSS · Review needed':r.clinical?'NIHSS · Incomplete':activeEvidence?(selection?evidenceLabel(activeEvidence):r.title):!r.evidence.adequate?'NIHSS · Not ready':fallbackLabel;
     const short=r.pending?`Review ${r.pending} remaining segments.`:r.score!==null?'Based on examiner findings.':r.clinical?'Complete examiner findings.':
       activeEvidence?(!activeEvidence.adequate?displayReason(activeEvidence.issues[0],r.temporal?'B':'A')??'Usable measurements are retained below.':'Clinician confirmation needed.'):
       !r.evidence.adequate?'Check tracking quality in Details.':'Clinician confirmation needed.';

@@ -1,5 +1,5 @@
 import {selectedFrame} from './segment-review.js?v=usability20';
-import {proposeAutoSelections} from './auto-selection.js?v=independent23';
+import {proposeAutoSelections} from './auto-selection.js?v=boundary24';
 
 export const SELECTION_REVIEW_VERSION='guided-selection-review-v1';
 const POSITION_KEYS=['rest','left','right'],PHASE_KEYS=['center','left','right'],BOUNDARIES=['start','end'];
@@ -76,7 +76,7 @@ export function refreshAutomaticSelections(clip,report,{force=false}={}){
     pushHistory(state,{type:'external-edit',selections:current});
   }
   const decisionFingerprint=reportFingerprint(report);
-  const sourceFingerprint=fingerprint(['independent23',decisionFingerprint,guidedFor(clip),clip.data.recording.durationSeconds]);
+  const sourceFingerprint=fingerprint(['boundary24',decisionFingerprint,guidedFor(clip),clip.data.recording.durationSeconds]);
   const replaced=runtimeReports.has(clip)&&runtimeReports.get(clip)!==report;
   runtimeReports.set(clip,report);
   if(!force&&!replaced&&state.autoProposal&&state.fingerprint===sourceFingerprint){remember(clip,state);return state;}

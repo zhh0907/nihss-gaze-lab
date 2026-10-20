@@ -17,7 +17,8 @@ Historical guided clips keep their recorded selection strategy. Unlabelled impor
 The inherited code boundaries are 0.15 and 0.40 in units of half eye width, not degrees. Negative codes denote subject-left. These boundaries have not been clinically calibrated.
 
 - Complete centered rest and full coded movement in both directions can yield **Possible 0**.
-- Other sufficiently supported patterns may yield **Possible 1** or **Review 1–2**. Three positions cannot establish a reflex response or definitively assign 2.
+- Other sufficiently supported patterns may yield **Possible 1** or **Review · 1/2**. Three positions cannot establish a reflex response or definitively assign 2.
+- Stable measurements spanning a code boundary stay usable. If the supported codes imply different outcomes, **Borderline · 0/1** (or the actual candidate set) expresses classification uncertainty; the affected eye is marked **near boundary**. This is not missing tracking, and the measured position is not shifted.
 - Incomplete evidence yields **Partial**, with available phases and individual-eye measurements, or **No usable evidence**. A missing eye is not treated as centered; no full score is emitted from partial data.
 
 The automatic result uses original checked measurements with flagged eyes excluded. Doctor-selected corrections produce a separate reviewed result. Clinician findings are an independent source, not training labels used by the automatic baseline. JSON preserves raw samples, selections, per-eye status, thresholds and review provenance. No model training or upload occurs.
